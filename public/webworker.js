@@ -19,7 +19,7 @@ async function loadPyodideAndPackages() {
 
 	await self.pyodide.loadPackage(["networkx"]);
 
-	self.postMessage({ type: "WORKER_INIT", payload: true });
+	self.postMessage({ type: "PACKAGES_LOADED" });
 }
 
 let pyodideReadyPromise = loadPyodideAndPackages();
@@ -38,6 +38,8 @@ self.onmessage = async (event) => {
 	// Now is the easy part, the one that is similar to working in the main thread:
 	try {
 		self.pyodide.runPython("import networkx as nx");
+		self.pyodide.runPython("import copy");
+		self.pyodide.runPython("import numpy as np");
 		self.pyodide.runPython("import time");
 		self.pyodide.runPython(python);
 		// let result = await self.pyodide.runPythonAsync(python);

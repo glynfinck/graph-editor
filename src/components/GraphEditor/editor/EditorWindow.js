@@ -48,7 +48,7 @@ const EditorWindow = (props) => {
 	const [context, setContext] = useState();
 
 	const animateHelper = useCallback(
-		async (ms) => {
+		async (animation, ms) => {
 			// add reset current to the end of the animation
 			// to get rid of the current indicator
 			let animation_prime = [...animation, { type: "RESET_CURRENT" }];
@@ -58,14 +58,14 @@ const EditorWindow = (props) => {
 			}
 			dispatch(graphActions.finishAnimation());
 		},
-		[animation, dispatch]
+		[dispatch]
 	);
 
 	useEffect(() => {
 		if (animating) {
-			animateHelper((101 - animationSpeed) * 8);
+			animateHelper(animation, (101 - animationSpeed) * 8);
 		}
-	}, [animating, animationSpeed, animateHelper]);
+	}, [animating, animation, animationSpeed, animateHelper]);
 
 	useEffect(() => {
 		loadPythonCode(boilerPlatePath).then((code) => {

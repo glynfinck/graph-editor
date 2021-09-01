@@ -10,7 +10,7 @@ const initialEditorSlice = {
 		},
 		{ name: "DIKSTRAS", code: dikstras },
 	],
-	selectedAlgorithm: 1,
+	selectedAlgorithm: 2,
 	script: "",
 	output: "",
 	isScriptProcessing: false,
