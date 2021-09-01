@@ -1,6 +1,6 @@
 import Editor from "@monaco-editor/react";
 import classes from "./EditorWindow.module.css";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useContext } from "react";
 import { Split } from "@geoffcox/react-splitter";
 import EditorHeader from "./EditorHeader";
 import { useSelector, useDispatch } from "react-redux";
@@ -12,6 +12,7 @@ import { graphActions } from "../../../store/graph/graph";
 import OutputWindow from "./OutputWindow";
 import { Row, Col } from "react-bootstrap";
 import OutputHeader from "./OutputHeader";
+import GraphEdtiorContext from "../store/graph-edtior-context";
 
 const loadPythonCode = (path) => {
 	const load = async () => {
