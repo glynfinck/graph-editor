@@ -10,7 +10,6 @@ const R = NODE_DIAMETER / 2; // 28
 const AH = 11; // arrowhead length
 const AW = 7; // arrowhead half-width
 const GAP = 24; // dot-grid spacing (world units) — matches the React Flow canvas
-const LABEL_MIN_ZOOM = 0.55; // hide labels when zoomed out past this
 
 /** The computed color a CSS var resolves to, read from inside `scope` so
  * ancestor-scoped palettes ([data-palette]) apply. Whatever format the browser
@@ -147,13 +146,26 @@ export default function PixiGraphCanvas() {
 
       const byId = new Map(nodes.map((n) => [n.id, n]));
 
-      // edges + arrowheads (batched into two Graphics)
-      const edgesG = new Graphics();
+      // A single Graphics has a geometry-buffer cap; a big graph overflows it
+      // and silently drops shapes (the missing edges). So batch into chunks —
+      // nodes especially, since each circle's fill+stroke is a lot of geometry.
+      const NODE_CHUNK = 150;
+      const EDGE_CHUNK = 600;
+
+      // edges (chunked stroke) + arrowheads
       const arrowsG = new Graphics();
+      let edgeG: Graphics | null = null;
+      let ei = 0;
       for (const e of edges) {
         const s = byId.get(e.source);
         const t = byId.get(e.target);
         if (!s || !t) continue;
+        if (ei % EDGE_CHUNK === 0) {
+          if (edgeG) edgeG.stroke({ width: 1.5, color: cEdge });
+          edgeG = new Graphics();
+          world.addChild(edgeG);
+        }
+        ei++;
         const sx = s.position.x;
         const sy = s.position.y;
         const tx = t.position.x;
@@ -164,7 +176,9 @@ export default function PixiGraphCanvas() {
         const ux = dx / d;
         const uy = dy / d;
         const endGap = directed ? R + AH : R;
-        edgesG.moveTo(sx + ux * R, sy + uy * R).lineTo(tx - ux * endGap, ty - uy * endGap);
+        edgeG!
+          .moveTo(sx + ux * R, sy + uy * R)
+          .lineTo(tx - ux * endGap, ty - uy * endGap);
         if (directed) {
           const tipX = tx - ux * R;
           const tipY = ty - uy * R;
@@ -177,25 +191,28 @@ export default function PixiGraphCanvas() {
           ]);
         }
       }
-      edgesG.stroke({ width: 1.5, color: cEdge });
+      if (edgeG) edgeG.stroke({ width: 1.5, color: cEdge });
       arrowsG.fill(cEdge);
-      world.addChild(edgesG, arrowsG);
+      world.addChild(arrowsG);
 
-      // nodes — fill + stroke PER circle so the border actually renders (a
-      // single batched stroke after a batched fill doesn't in Pixi v8)
-      const nodesG = new Graphics();
-      for (const n of nodes) {
-        nodesG
+      // nodes — fill + stroke PER circle so the border renders (batched stroke
+      // after batched fill is a no-op in Pixi v8), chunked so we don't overflow
+      let nodeG: Graphics | null = null;
+      nodes.forEach((n, i) => {
+        if (i % NODE_CHUNK === 0) {
+          nodeG = new Graphics();
+          world.addChild(nodeG);
+        }
+        nodeG!
           .circle(n.position.x, n.position.y, R)
           .fill(cNode)
           .stroke({ width: 2, color: cBorder });
-      }
-      world.addChild(nodesG);
+      });
 
       // labels — BitmapText shares ONE glyph atlas across every instance
       // (unlike Text, which is a texture each), so there's no node cap. Drawn
-      // white and tinted to the text color; the whole layer hides when zoomed
-      // out (LOD).
+      // white and tinted to the text color, and always visible (like React
+      // Flow) — BitmapText is cheap enough to keep on at any zoom.
       const labels = new Container();
       for (const n of nodes) {
         const short = n.data.name.length <= 4;
@@ -217,10 +234,6 @@ export default function PixiGraphCanvas() {
         labels.addChild(txt);
       }
       world.addChild(labels);
-
-      const updateLOD = () => {
-        labels.visible = world.scale.x > LABEL_MIN_ZOOM;
-      };
 
       // screen-space dots at GAP*scale spacing, phased by the pan offset, so the
       // grid scrolls/zooms with the graph. Skipped when too dense to read.
@@ -254,7 +267,6 @@ export default function PixiGraphCanvas() {
       };
       const redraw = () => {
         drawGrid();
-        updateLOD();
         saveView();
       };
 
