@@ -630,8 +630,8 @@ export function ProjectWorkspace({
                 </div>
               ) : activeGraph ? (
                 pixi ? (
-                  // EXPERIMENT: WebGL renderer with live playback, view-only
-                  <PixiGraphCanvas showPlayback />
+                  // EXPERIMENT: WebGL renderer with live playback + editing
+                  <PixiGraphCanvas editable={canEditGraph} showPlayback />
                 ) : (
                   // canvas edits are runnable immediately; Save persists them
                   // when the graph is the caller's own

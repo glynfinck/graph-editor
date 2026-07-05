@@ -184,7 +184,7 @@ export function GraphViewer({
 
       <div className="min-h-0 flex-1">
         {pixi ? (
-          <PixiGraphCanvas />
+          <PixiGraphCanvas editable={canEdit} />
         ) : (
           <GraphCanvas editable={canEdit} showPlayback={false} />
         )}
