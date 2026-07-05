@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 import { Application, Container, Graphics, Text } from "pixi.js";
 
 import { NODE_DIAMETER } from "@/components/editor/graph-node";
@@ -14,22 +15,38 @@ const AW = 7; // arrowhead half-width
 const LABEL_CAP = 800;
 const LABEL_MIN_ZOOM = 0.55; // hide labels when zoomed out past this
 
-/**
- * Resolve a CSS custom property (even oklch) to a packed 0xRRGGBB number,
- * reading it from inside `scope` so palette variables scoped to an ancestor
- * (e.g. [data-palette]) resolve correctly.
- */
-function cssColor(scope: HTMLElement, varName: string, fallback: number): number {
+/** The computed color a CSS var resolves to, read from inside `scope` so
+ * ancestor-scoped palettes ([data-palette]) apply. Whatever format the browser
+ * serializes (rgb / oklch / color()) comes back verbatim. */
+function resolveColor(scope: HTMLElement, varName: string): string {
   const probe = document.createElement("span");
   probe.style.color = `var(${varName})`;
   probe.style.display = "none";
   scope.appendChild(probe);
-  const rgb = getComputedStyle(probe).color; // browser resolves to rgb()/rgba()
+  const color = getComputedStyle(probe).color;
   probe.remove();
-  const m = rgb.match(/\d+(?:\.\d+)?/g);
-  if (!m || m.length < 3) return fallback;
-  const [r, g, b] = m.map(Number);
-  return ((r & 255) << 16) | ((g & 255) << 8) | (b & 255);
+  return color;
+}
+
+/** Normalize ANY CSS color string (rgb, oklch, color(), named) to 0xRRGGBB by
+ * painting one pixel and reading it back — no fragile string parsing. A magenta
+ * sentinel detects colors the canvas can't parse and falls back cleanly. */
+function toHex(cssColorString: string, fallback: number): number {
+  const cv = document.createElement("canvas");
+  cv.width = 1;
+  cv.height = 1;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return fallback;
+  ctx.fillStyle = "#ff00ff";
+  ctx.fillStyle = cssColorString; // ignored if unparseable → sentinel remains
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  if (r === 255 && g === 0 && b === 255) return fallback;
+  return (r << 16) | (g << 8) | b;
+}
+
+function cssColor(scope: HTMLElement, varName: string, fallback: number): number {
+  return toHex(resolveColor(scope, varName), fallback);
 }
 
 /**
@@ -44,10 +61,20 @@ export default function PixiGraphCanvas() {
   const nodes = useEditorStore((s) => s.nodes);
   const edges = useEditorStore((s) => s.edges);
   const directed = useEditorStore((s) => s.directed);
+  const { resolvedTheme } = useTheme(); // re-render when light/dark flips
+  const [debug, setDebug] = useState("");
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+
+    // TEMP diagnostic: surface exactly what the color vars resolve to
+    setDebug(
+      `bg ${resolveColor(el, "--background")} · node ${resolveColor(
+        el,
+        "--graph-node",
+      )} · edge ${resolveColor(el, "--muted-foreground")}`,
+    );
 
     let destroyed = false;
     let app: Application | null = null;
@@ -248,13 +275,16 @@ export default function PixiGraphCanvas() {
         // ignore teardown races
       }
     };
-  }, [nodes, edges, directed]);
+  }, [nodes, edges, directed, resolvedTheme]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden">
-      <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-background/85 px-3 py-1 text-xs text-muted-foreground ring-1 ring-border">
-        Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges · drag to pan ·
-        scroll to zoom
+      <div className="pointer-events-none absolute bottom-2 left-1/2 flex max-w-[92%] -translate-x-1/2 flex-col items-center gap-0.5 rounded-lg bg-background/85 px-3 py-1 text-center text-xs text-muted-foreground ring-1 ring-border">
+        <span>
+          Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges · drag to
+          pan · scroll to zoom
+        </span>
+        <span className="font-mono text-[10px] opacity-70">{debug}</span>
       </div>
     </div>
   );
