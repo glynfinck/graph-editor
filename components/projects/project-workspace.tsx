@@ -10,7 +10,9 @@ import {
   Copy,
   FolderTree,
   GitFork,
+  Highlighter,
   Loader2,
+  LocateFixed,
   PanelRight,
   PinOff,
   Play,
@@ -27,6 +29,7 @@ import { toast } from "sonner";
 import { ConsolePanel } from "@/components/editor/console-panel";
 import { DirectedToggle } from "@/components/editor/directed-toggle";
 import { GraphCanvas } from "@/components/editor/graph-canvas";
+import { ReadOnlyOverlay } from "@/components/editor/read-only-overlay";
 
 // EXPERIMENT: WebGL renderer, client-only (needs the DOM/WebGL), lazy-loaded so
 // pixi.js stays out of the bundle until you flip to it.
@@ -52,6 +55,7 @@ import {
 } from "@/components/ui/select";
 import { FileTree } from "@/components/projects/file-tree";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tip } from "@/components/ui/tip";
 import {
   createGraph,
   duplicateGraph,
@@ -67,6 +71,7 @@ import {
 import { useEditorStore } from "@/lib/editor/store";
 import {
   useExecutingLine,
+  useMonacoBreakpoints,
   useMonacoLineHighlight,
 } from "@/lib/editor/use-monaco-line-highlight";
 import { usePythonRunner } from "@/lib/editor/use-python-runner";
@@ -142,6 +147,12 @@ export function ProjectWorkspace({
   const editorRef = useRef<MonacoEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const [modelVersion, setModelVersion] = useState(0);
+  // gutter clicks land in a mount-time listener; keep the open file current
+  // (updated in an effect — ref writes during render trip react-hooks/refs)
+  const openPathRef = useRef(openPath);
+  useEffect(() => {
+    openPathRef.current = openPath;
+  }, [openPath]);
 
   // the editor holds the id of whichever graph's document is currently live.
   // The active graph's doc is fetched on demand (the picker only carries
@@ -323,13 +334,21 @@ export function ProjectWorkspace({
   }
 
   // highlight the executing line while the open file matches the recording
+  const showExecutingLine = useEditorStore((s) => s.showExecutingLine);
+  const followExecutingLine = useEditorStore((s) => s.followExecutingLine);
+  const setShowExecutingLine = useEditorStore((s) => s.setShowExecutingLine);
+  const setFollowExecutingLine = useEditorStore(
+    (s) => s.setFollowExecutingLine,
+  );
   const highlightLine = useExecutingLine(openPath);
   useMonacoLineHighlight({
     editorRef,
     monacoRef,
-    line: editedSinceRun ? null : highlightLine,
+    line: editedSinceRun || !showExecutingLine ? null : highlightLine,
+    reveal: followExecutingLine,
     modelVersion,
   });
+  useMonacoBreakpoints({ editorRef, file: openPath, modelVersion });
 
   // one save for the whole surface: the project files always, the test
   // graph's document too when it's the caller's to write
@@ -372,11 +391,18 @@ export function ProjectWorkspace({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-        <Button variant="ghost" size="icon-sm" aria-label="All projects" asChild>
-          <Link href="/projects">
-            <ArrowLeft />
-          </Link>
-        </Button>
+        <Tip label="All projects">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="All projects"
+            asChild
+          >
+            <Link href="/projects">
+              <ArrowLeft />
+            </Link>
+          </Button>
+        </Tip>
         <Input
           aria-label="Project name"
           value={name}
@@ -439,77 +465,90 @@ export function ProjectWorkspace({
             </SelectContent>
           </Select>
           {userId && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="New test graph"
-              disabled={creatingGraph}
-              onClick={createNewGraph}
-            >
-              {creatingGraph ? <Loader2 className="animate-spin" /> : <Plus />}
-            </Button>
+            <Tip label="New test graph">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="New test graph"
+                disabled={creatingGraph}
+                onClick={createNewGraph}
+              >
+                {creatingGraph ? <Loader2 className="animate-spin" /> : <Plus />}
+              </Button>
+            </Tip>
           )}
           {activeGraph && !canEditGraph && userId && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Copy this graph into your graphs"
-              disabled={copying}
-              onClick={copyActiveGraph}
-            >
-              {copying ? <Loader2 className="animate-spin" /> : <Copy />}
-            </Button>
+            <Tip label="Copy this graph into your graphs">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Copy this graph into your graphs"
+                disabled={copying}
+                onClick={copyActiveGraph}
+              >
+                {copying ? <Loader2 className="animate-spin" /> : <Copy />}
+              </Button>
+            </Tip>
           )}
           {canEditGraph && <DirectedToggle />}
           {activeGraph && graphIds.includes(activeGraph.id) && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Unpin this graph from the project"
-              onClick={() => unpinGraph(activeGraph.id)}
-            >
-              <PinOff />
-            </Button>
+            <Tip label="Unpin this graph from the project">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Unpin this graph from the project"
+                onClick={() => unpinGraph(activeGraph.id)}
+              >
+                <PinOff />
+              </Button>
+            </Tip>
           )}
           {activeGraph && (
             // EXPERIMENT: flip the renderer to compare performance (view-only)
-            <Button
-              size="sm"
-              variant={pixi ? "secondary" : "ghost"}
-              aria-pressed={pixi}
-              title="Toggle the experimental WebGL (Pixi) renderer"
-              onClick={() => setPixi((v) => !v)}
-            >
-              <Sparkles />
-              {pixi ? "Pixi" : "React Flow"}
-            </Button>
+            <Tip label="Toggle the experimental WebGL (Pixi) renderer">
+              <Button
+                size="sm"
+                variant={pixi ? "secondary" : "ghost"}
+                aria-pressed={pixi}
+                onClick={() => setPixi((v) => !v)}
+              >
+                <Sparkles />
+                {pixi ? "Pixi" : "React Flow"}
+              </Button>
+            </Tip>
           )}
 
           <div className="flex items-center">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Toggle file tree"
-              onClick={togglePanel(filesPanel)}
-            >
-              <FolderTree />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Toggle terminal"
-              onClick={togglePanel(terminalPanel)}
-            >
-              <SquareTerminal />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Toggle canvas column"
-              onClick={togglePanel(rightPanel)}
-            >
-              <PanelRight />
-            </Button>
+            <Tip label="Toggle the file tree">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Toggle file tree"
+                onClick={togglePanel(filesPanel)}
+              >
+                <FolderTree />
+              </Button>
+            </Tip>
+            <Tip label="Toggle the terminal">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Toggle terminal"
+                onClick={togglePanel(terminalPanel)}
+              >
+                <SquareTerminal />
+              </Button>
+            </Tip>
+            <Tip label="Toggle the canvas column">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Toggle canvas column"
+                onClick={togglePanel(rightPanel)}
+              >
+                <PanelRight />
+              </Button>
+            </Tip>
           </div>
 
           {(dirty || graphDirty) && (
@@ -553,6 +592,36 @@ export function ProjectWorkspace({
                 <span className="hidden text-xs text-muted-foreground xl:block">
                   ⌘⏎ runs the open file
                 </span>
+                <Tip label="Highlight the executing line during playback">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Toggle executing-line highlight"
+                    aria-pressed={showExecutingLine}
+                    className={
+                      showExecutingLine ? undefined : "text-muted-foreground/50"
+                    }
+                    onClick={() => setShowExecutingLine(!showExecutingLine)}
+                  >
+                    <Highlighter />
+                  </Button>
+                </Tip>
+                <Tip label="Scroll the editor to follow the executing line">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Toggle follow execution"
+                    aria-pressed={followExecutingLine}
+                    className={
+                      followExecutingLine
+                        ? undefined
+                        : "text-muted-foreground/50"
+                    }
+                    onClick={() => setFollowExecutingLine(!followExecutingLine)}
+                  >
+                    <LocateFixed />
+                  </Button>
+                </Tip>
                 {status === "running" ? (
                   <Button size="sm" variant="destructive" onClick={stop}>
                     <Square /> Stop
@@ -588,6 +657,21 @@ export function ProjectWorkspace({
                       monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
                       () => runOpenFile(),
                     );
+                    // click the glyph margin to toggle a playback breakpoint
+                    editor.onMouseDown((e) => {
+                      if (
+                        e.target.type !==
+                        monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+                      )
+                        return;
+                      const line = e.target.position?.lineNumber;
+                      const path = openPathRef.current;
+                      if (line && path) {
+                        useEditorStore
+                          .getState()
+                          .toggleBreakpoint(path, line);
+                      }
+                    });
                   }}
                   loading={
                     <span className="text-sm text-muted-foreground">
@@ -603,6 +687,7 @@ export function ProjectWorkspace({
                     wordWrap: "on",
                     automaticLayout: true,
                     padding: { top: 12 },
+                    glyphMargin: true,
                   }}
                 />
               ) : (
@@ -629,14 +714,24 @@ export function ProjectWorkspace({
                   <Skeleton className="h-full w-full rounded-lg" />
                 </div>
               ) : activeGraph ? (
-                pixi ? (
-                  // EXPERIMENT: WebGL renderer with live playback + editing
-                  <PixiGraphCanvas editable={canEditGraph} showPlayback />
-                ) : (
-                  // canvas edits are runnable immediately; Save persists them
-                  // when the graph is the caller's own
-                  <GraphCanvas editable={canEditGraph} />
-                )
+                <div className="relative h-full w-full">
+                  {pixi ? (
+                    // EXPERIMENT: WebGL renderer with live playback + editing
+                    <PixiGraphCanvas editable={canEditGraph} showPlayback />
+                  ) : (
+                    // canvas edits are runnable immediately; Save persists them
+                    // when the graph is the caller's own
+                    <GraphCanvas editable={canEditGraph} />
+                  )}
+                  {!canEditGraph && (
+                    <ReadOnlyOverlay
+                      isSample={activeGraph.is_sample}
+                      canCopy={!!userId}
+                      copying={copying}
+                      onCopy={copyActiveGraph}
+                    />
+                  )}
+                </div>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Waypoints className="size-6" />
