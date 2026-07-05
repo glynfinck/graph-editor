@@ -87,6 +87,9 @@ export default function PixiViewCanvas({
       }
       app = application;
       el.appendChild(app.canvas);
+      // all input is DOM-driven; disable Pixi's event system so it doesn't
+      // reset the canvas cursor on every move
+      app.stage.eventMode = "none";
 
       const gridG = new Graphics();
       app.stage.addChild(gridG);

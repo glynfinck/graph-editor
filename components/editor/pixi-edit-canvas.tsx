@@ -115,6 +115,9 @@ export default function PixiEditCanvas({
       }
       app = application;
       el.appendChild(app.canvas);
+      // we drive all input through DOM events on the canvas; disable Pixi's own
+      // event system so it doesn't fight us for the cursor on every move
+      app.stage.eventMode = "none";
 
       const gridG = new Graphics();
       app.stage.addChild(gridG);
@@ -201,6 +204,7 @@ export default function PixiEditCanvas({
       scene.reconcile(s0.nodes, s0.edges);
 
       const detachInput = attachInteractions({
+        container: el,
         canvas,
         world,
         scene,

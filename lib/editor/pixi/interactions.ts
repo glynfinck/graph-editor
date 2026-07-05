@@ -2,8 +2,9 @@
  * Pointer + keyboard editing for the Pixi edit canvas. One state machine
  * distinguishes pan / node-drag / rim-connect / click-select by a small
  * screen-space threshold, and dispatches through the editor store (which owns
- * dirty semantics). Rendering side effects go through the passed handles so this
- * module stays free of React.
+ * dirty semantics). A hover pass gives affordance — the cursor and a ring change
+ * with what's under the pointer — so connecting from a rim is discoverable.
+ * Rendering side effects go through the passed handles; this module is React-free.
  */
 import type { Container, Graphics } from "pixi.js";
 import { toast } from "sonner";
@@ -13,9 +14,10 @@ import { R, type Pt } from "@/lib/editor/pixi/geometry";
 import { useEditorStore } from "@/lib/editor/store";
 import { MAX_EDGES, MAX_NODES } from "@/lib/graph/types";
 
-// world-unit hit radii (node radius is 28): inner body drags, the rim connects
-const MOVE_R = 23;
-const RIM_R = 32;
+// world-unit hit radii (node radius is 28): the inner body drags the node, the
+// rim (circle edge and just outside it) starts a connection
+const MOVE_R = 24;
+const RIM_R = 36;
 const SNAP_R = 36; // connect-target snap radius (React Flow's connectionRadius)
 const DRAG_PX = 4; // screen threshold separating a click from a drag
 const EDGE_HIT_PX = 7; // screen pick tolerance for selecting an edge
@@ -26,10 +28,13 @@ type Pending =
   | { kind: "connect"; id: string; sx: number; sy: number };
 
 export function attachInteractions(opts: {
+  /** the wrapping element — the cursor is set here (Pixi manages the canvas's
+   * own cursor on every move, so ours would get clobbered); the canvas inherits */
+  container: HTMLElement;
   canvas: HTMLCanvasElement;
   world: Container;
   scene: ObjectScene;
-  /** top layer for the in-progress connection line + snap highlight */
+  /** top layer for the hover ring and in-progress connection line */
   connectLayer: Graphics;
   connectColor: number;
   screenToWorld: (clientX: number, clientY: number) => Pt;
@@ -39,6 +44,7 @@ export function attachInteractions(opts: {
   refreshSelection: () => void;
 }): () => void {
   const {
+    container,
     canvas,
     world,
     scene,
@@ -54,6 +60,49 @@ export function attachInteractions(opts: {
   let lastX = 0;
   let lastY = 0;
   let hovering = false;
+  // hover affordance: which node (and zone) the idle pointer is over
+  let hoverId: string | null = null;
+  let hoverZone: "body" | "rim" | null = null;
+
+  const drawHover = () => {
+    connectLayer.clear();
+    if (!hoverId) return;
+    const p = scene.nodePos(hoverId);
+    if (!p) return;
+    // a ring hugging the rim signals "you can drag from here to connect"
+    connectLayer
+      .circle(p.x, p.y, R + 2)
+      .stroke({ width: 2, color: connectColor, alpha: hoverZone === "rim" ? 0.9 : 0.4 });
+  };
+
+  const updateHover = (clientX: number, clientY: number) => {
+    const w = screenToWorld(clientX, clientY);
+    const hit = scene.hitNode(w.x, w.y, RIM_R);
+    let id: string | null = null;
+    let zone: "body" | "rim" | null = null;
+    let cursor = "grab";
+    if (hit) {
+      id = hit.id;
+      zone = hit.dist <= MOVE_R ? "body" : "rim";
+      cursor = zone === "rim" ? "crosshair" : "grab";
+    } else if (scene.hitEdge(w.x, w.y, EDGE_HIT_PX / world.scale.x)) {
+      cursor = "pointer";
+    }
+    container.style.cursor = cursor;
+    if (id !== hoverId || zone !== hoverZone) {
+      hoverId = id;
+      hoverZone = zone;
+      drawHover();
+    }
+  };
+
+  const clearHover = () => {
+    if (hoverId) {
+      hoverId = null;
+      hoverZone = null;
+      connectLayer.clear();
+    }
+  };
 
   const drawConnect = (sourceId: string, cursor: Pt) => {
     connectLayer.clear();
@@ -66,7 +115,6 @@ export function attachInteractions(opts: {
     const d = Math.hypot(dx, dy) || 1;
     const ux = dx / d;
     const uy = dy / d;
-    // start at the source rim; stop at the target rim when snapping
     const x1 = s.x + ux * R;
     const y1 = s.y + uy * R;
     const x2 = snap ? end.x - ux * R : end.x;
@@ -79,7 +127,7 @@ export function attachInteractions(opts: {
 
   const onDown = (ev: PointerEvent) => {
     if (ev.button !== 0) return;
-    hovering = true; // interacting implies focus, even if enter didn't fire
+    hovering = true;
     const w = screenToWorld(ev.clientX, ev.clientY);
     const hit = scene.hitNode(w.x, w.y, RIM_R);
     lastX = ev.clientX;
@@ -100,17 +148,27 @@ export function attachInteractions(opts: {
       pending = { kind: "pan", sx: ev.clientX, sy: ev.clientY };
     }
     active = null;
-    canvas.setPointerCapture?.(ev.pointerId);
   };
 
   const onMove = (ev: PointerEvent) => {
-    if (!pending) return;
+    if (!pending) {
+      if (hovering) updateHover(ev.clientX, ev.clientY);
+      return;
+    }
     if (!active) {
       const moved = Math.hypot(ev.clientX - pending.sx, ev.clientY - pending.sy);
       if (moved < DRAG_PX) return; // still a click, not a drag
       active = pending.kind;
-      if (active === "pan") canvas.style.cursor = "grabbing";
-      else if (active === "connect") canvas.style.cursor = "crosshair";
+      if (active === "pan") {
+        container.style.cursor = "grabbing";
+        connectLayer.clear(); // drop any hover ring
+      } else if (active === "connect") {
+        container.style.cursor = "crosshair";
+      } else {
+        container.style.cursor = "grabbing";
+        connectLayer.clear();
+        hoverId = null;
+      }
     }
     if (active === "pan") {
       world.position.x += ev.clientX - lastX;
@@ -134,10 +192,8 @@ export function attachInteractions(opts: {
 
   const onUp = (ev: PointerEvent) => {
     if (!pending) return;
-    canvas.releasePointerCapture?.(ev.pointerId);
     const store = useEditorStore.getState();
     if (!active) {
-      // a click, not a drag → selection
       if (pending.kind === "move" || pending.kind === "connect") {
         store.selectOnly({ nodeId: pending.id });
       } else {
@@ -160,7 +216,6 @@ export function attachInteractions(opts: {
     } else if (active === "connect" && pending.kind === "connect") {
       const w = screenToWorld(ev.clientX, ev.clientY);
       const snap = scene.hitNode(w.x, w.y, SNAP_R, pending.id);
-      connectLayer.clear();
       if (snap) {
         if (store.edges.length >= MAX_EDGES) {
           toast.error(`Graphs are limited to ${MAX_EDGES.toLocaleString()} edges.`);
@@ -171,7 +226,9 @@ export function attachInteractions(opts: {
     }
     pending = null;
     active = null;
-    canvas.style.cursor = "grab";
+    connectLayer.clear();
+    hoverId = null;
+    updateHover(ev.clientX, ev.clientY); // restore hover cursor/ring
   };
 
   const onDbl = (ev: MouseEvent) => {
@@ -182,8 +239,7 @@ export function attachInteractions(opts: {
       toast.error(`Graphs are limited to ${MAX_NODES.toLocaleString()} nodes.`);
       return;
     }
-    // addNodeAt takes the top-left corner, so offset by the radius to center it
-    store.addNodeAt(w.x - R, w.y - R);
+    store.addNodeAt(w.x - R, w.y - R); // addNodeAt takes the top-left corner
   };
 
   const onWheel = (ev: WheelEvent) => {
@@ -202,6 +258,7 @@ export function attachInteractions(opts: {
     world.position.set(mx - wx * next, my - wy * next);
     redraw();
     refreshSelection();
+    drawHover();
   };
 
   const onEnter = () => {
@@ -209,6 +266,7 @@ export function attachInteractions(opts: {
   };
   const onLeave = () => {
     hovering = false;
+    if (!active) clearHover();
   };
 
   // Delete/Backspace removes the selection — only while the canvas is the user's
@@ -235,7 +293,7 @@ export function attachInteractions(opts: {
     useEditorStore.getState().removeElements(nodeIds, edgeIds);
   };
 
-  canvas.style.cursor = "grab";
+  container.style.cursor = "grab";
   canvas.addEventListener("pointerdown", onDown);
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
