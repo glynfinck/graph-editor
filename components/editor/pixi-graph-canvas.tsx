@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Application, Container, Graphics, Text } from "pixi.js";
+import { Application, BitmapText, Container, Graphics } from "pixi.js";
 
 import { NODE_DIAMETER } from "@/components/editor/graph-node";
 import { useEditorStore } from "@/lib/editor/store";
@@ -10,9 +10,6 @@ const R = NODE_DIAMETER / 2; // 28
 const AH = 11; // arrowhead length
 const AW = 7; // arrowhead half-width
 const GAP = 24; // dot-grid spacing (world units) — matches the React Flow canvas
-// creating a Text texture per node is the expensive part; above this we skip
-// labels (a level-of-detail cap) so the geometry still renders fast at scale
-const LABEL_CAP = 800;
 const LABEL_MIN_ZOOM = 0.55; // hide labels when zoomed out past this
 
 /** The computed color a CSS var resolves to, read from inside `scope` so
@@ -195,33 +192,34 @@ export default function PixiGraphCanvas() {
       }
       world.addChild(nodesG);
 
-      // labels (skipped past the cap; hidden when zoomed out)
-      let labels: Container | null = null;
-      if (nodes.length <= LABEL_CAP) {
-        labels = new Container();
-        for (const n of nodes) {
-          const short = n.data.name.length <= 4;
-          const txt = new Text({
-            text: n.data.name,
-            style: {
-              fontSize: 15,
-              fontWeight: "700",
-              fill: cText,
-              fontFamily: "ui-sans-serif, system-ui, sans-serif",
-            },
-          });
-          txt.anchor.set(0.5);
-          txt.position.set(
-            n.position.x,
-            short ? n.position.y : n.position.y + R + 12,
-          );
-          labels.addChild(txt);
-        }
-        world.addChild(labels);
+      // labels — BitmapText shares ONE glyph atlas across every instance
+      // (unlike Text, which is a texture each), so there's no node cap. Drawn
+      // white and tinted to the text color; the whole layer hides when zoomed
+      // out (LOD).
+      const labels = new Container();
+      for (const n of nodes) {
+        const short = n.data.name.length <= 4;
+        const txt = new BitmapText({
+          text: n.data.name,
+          style: {
+            fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            fontSize: 15,
+            fontWeight: "700",
+            fill: 0xffffff,
+          },
+        });
+        txt.tint = cText;
+        txt.anchor.set(0.5);
+        txt.position.set(
+          n.position.x,
+          short ? n.position.y : n.position.y + R + 12,
+        );
+        labels.addChild(txt);
       }
+      world.addChild(labels);
 
       const updateLOD = () => {
-        if (labels) labels.visible = world.scale.x > LABEL_MIN_ZOOM;
+        labels.visible = world.scale.x > LABEL_MIN_ZOOM;
       };
 
       // screen-space dots at GAP*scale spacing, phased by the pan offset, so the
