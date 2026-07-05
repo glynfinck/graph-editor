@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import { Application, Container, Graphics, Text } from "pixi.js";
 
@@ -62,19 +62,10 @@ export default function PixiGraphCanvas() {
   const edges = useEditorStore((s) => s.edges);
   const directed = useEditorStore((s) => s.directed);
   const { resolvedTheme } = useTheme(); // re-render when light/dark flips
-  const [debug, setDebug] = useState("");
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-
-    // TEMP diagnostic: surface exactly what the color vars resolve to
-    setDebug(
-      `bg ${resolveColor(el, "--background")} · node ${resolveColor(
-        el,
-        "--graph-node",
-      )} · edge ${resolveColor(el, "--muted-foreground")}`,
-    );
 
     let destroyed = false;
     let app: Application | null = null;
@@ -279,12 +270,9 @@ export default function PixiGraphCanvas() {
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden">
-      <div className="pointer-events-none absolute bottom-2 left-1/2 flex max-w-[92%] -translate-x-1/2 flex-col items-center gap-0.5 rounded-lg bg-background/85 px-3 py-1 text-center text-xs text-muted-foreground ring-1 ring-border">
-        <span>
-          Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges · drag to
-          pan · scroll to zoom
-        </span>
-        <span className="font-mono text-[10px] opacity-70">{debug}</span>
+      <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-background/85 px-3 py-1 text-xs text-muted-foreground ring-1 ring-border">
+        Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges · drag to pan ·
+        scroll to zoom
       </div>
     </div>
   );
