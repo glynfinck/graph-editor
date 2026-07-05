@@ -32,6 +32,72 @@ describe("client-minted ids are uuids", () => {
   });
 });
 
+describe("selection and removal", () => {
+  function threeNodeGraph() {
+    const store = useEditorStore.getState();
+    store.init("g", "graph", "", false, { nodes: [], edges: [] });
+    store.addNodeAt(0, 0);
+    store.addNodeAt(100, 0);
+    store.addNodeAt(200, 0);
+    const [a, b, c] = useEditorStore.getState().nodes;
+    store.connect(a.id, b.id);
+    store.connect(b.id, c.id);
+    useEditorStore.setState({ dirty: false }); // building dirtied it
+    return { a, b, c };
+  }
+
+  it("selectOnly selects exactly one node and never dirties", () => {
+    const { a, b } = threeNodeGraph();
+    useEditorStore.getState().selectOnly({ nodeId: a.id });
+    let nodes = useEditorStore.getState().nodes;
+    expect(nodes.find((n) => n.id === a.id)?.selected).toBe(true);
+    expect(nodes.filter((n) => n.selected)).toHaveLength(1);
+
+    // switching selection deselects the previous one
+    useEditorStore.getState().selectOnly({ nodeId: b.id });
+    nodes = useEditorStore.getState().nodes;
+    expect(nodes.find((n) => n.id === a.id)?.selected).toBe(false);
+    expect(nodes.find((n) => n.id === b.id)?.selected).toBe(true);
+    expect(useEditorStore.getState().dirty).toBe(false);
+  });
+
+  it("selecting an edge deselects nodes, and null clears everything", () => {
+    const { a } = threeNodeGraph();
+    const [e0] = useEditorStore.getState().edges;
+    useEditorStore.getState().selectOnly({ nodeId: a.id });
+    useEditorStore.getState().selectOnly({ edgeId: e0.id });
+    expect(useEditorStore.getState().nodes.some((n) => n.selected)).toBe(false);
+    expect(
+      useEditorStore.getState().edges.find((e) => e.id === e0.id)?.selected,
+    ).toBe(true);
+
+    useEditorStore.getState().selectOnly(null);
+    expect(useEditorStore.getState().nodes.some((n) => n.selected)).toBe(false);
+    expect(useEditorStore.getState().edges.some((e) => e.selected)).toBe(false);
+  });
+
+  it("removeElements cascades to incident edges and dirties", () => {
+    const { b } = threeNodeGraph();
+    useEditorStore.getState().removeElements([b.id], []);
+    const state = useEditorStore.getState();
+    expect(state.nodes.some((n) => n.id === b.id)).toBe(false);
+    expect(state.nodes).toHaveLength(2);
+    // b touched both edges → both removed, no orphans left behind
+    expect(state.edges).toHaveLength(0);
+    expect(state.dirty).toBe(true);
+  });
+
+  it("removeElements can drop a lone edge without touching nodes", () => {
+    threeNodeGraph();
+    const [e0] = useEditorStore.getState().edges;
+    useEditorStore.getState().removeElements([], [e0.id]);
+    const state = useEditorStore.getState();
+    expect(state.edges.some((e) => e.id === e0.id)).toBe(false);
+    expect(state.edges).toHaveLength(1);
+    expect(state.nodes).toHaveLength(3);
+  });
+});
+
 describe("event-granularity stepping", () => {
   // positions after a graph event: 1 (node), 4 (node), 6 (clear)
   const frames: Frame[] = [

@@ -96,6 +96,10 @@ type EditorState = {
   setDirected: (directed: boolean) => void;
   onNodesChange: (changes: NodeChange<GraphFlowNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<GraphFlowEdge>[]) => void;
+  /** select exactly one node or edge (or clear with null) — never dirties */
+  selectOnly: (target: { nodeId?: string; edgeId?: string } | null) => void;
+  /** remove nodes (cascading to their incident edges) plus edges, in one pass */
+  removeElements: (nodeIds: string[], edgeIds: string[]) => void;
   connect: (source: string, target: string) => void;
   addNodeAt: (x: number, y: number) => void;
   setNodeName: (nodeId: string, name: string) => void;
@@ -183,6 +187,51 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       edges: applyEdgeChanges(changes, state.edges),
       dirty: state.dirty || changes.some((c) => c.type === "remove"),
     })),
+
+  // Single-select across both collections. applyNodeChanges/applyEdgeChanges
+  // don't auto-deselect, so emit deselects for anything currently selected that
+  // isn't the target. Routed through the change handlers, which don't dirty on
+  // "select" — so clicking never lights up Save.
+  selectOnly: (target) => {
+    const { nodes, edges, onNodesChange, onEdgesChange } = get();
+    const nodeId = target?.nodeId ?? null;
+    const edgeId = target?.edgeId ?? null;
+    const nodeChanges = nodes
+      .filter((n) => (n.selected ?? false) !== (n.id === nodeId))
+      .map((n) => ({
+        id: n.id,
+        type: "select" as const,
+        selected: n.id === nodeId,
+      }));
+    const edgeChanges = edges
+      .filter((e) => (e.selected ?? false) !== (e.id === edgeId))
+      .map((e) => ({
+        id: e.id,
+        type: "select" as const,
+        selected: e.id === edgeId,
+      }));
+    if (nodeChanges.length) onNodesChange(nodeChanges);
+    if (edgeChanges.length) onEdgesChange(edgeChanges);
+  },
+
+  // Removing a node also removes its incident edges (else the saved doc keeps
+  // orphan edges — invisible on canvas but corrupt). One pass for both.
+  removeElements: (nodeIds, edgeIds) => {
+    const { nodes, edges, onNodesChange, onEdgesChange } = get();
+    const nodeSet = new Set(nodeIds);
+    const edgeSet = new Set(edgeIds);
+    for (const e of edges) {
+      if (nodeSet.has(e.source) || nodeSet.has(e.target)) edgeSet.add(e.id);
+    }
+    const edgeChanges = [...edgeSet]
+      .filter((id) => edges.some((e) => e.id === id))
+      .map((id) => ({ id, type: "remove" as const }));
+    const nodeChanges = [...nodeSet]
+      .filter((id) => nodes.some((n) => n.id === id))
+      .map((id) => ({ id, type: "remove" as const }));
+    if (edgeChanges.length) onEdgesChange(edgeChanges);
+    if (nodeChanges.length) onNodesChange(nodeChanges);
+  },
 
   connect: (source, target) => {
     if (source === target) return;

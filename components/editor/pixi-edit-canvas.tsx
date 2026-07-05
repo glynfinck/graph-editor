@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Application, Container, Graphics } from "pixi.js";
 
+import { EdgeInspector } from "@/components/editor/edge-inspector";
+import { NodeInspector } from "@/components/editor/node-inspector";
 import { PlaybackControls } from "@/components/editor/playback-controls";
 import { createObjectScene, type ObjectScene } from "@/lib/editor/pixi/base-objects";
 import { resolvePalette } from "@/lib/editor/pixi/colors";
-import { fitBounds } from "@/lib/editor/pixi/geometry";
+import { fitBounds, R, trimmedEnds } from "@/lib/editor/pixi/geometry";
 import { drawGrid } from "@/lib/editor/pixi/grid";
+import { attachInteractions } from "@/lib/editor/pixi/interactions";
 import {
   createPlaybackOverlay,
   type PlaybackOverlay,
@@ -19,6 +22,7 @@ type EditScene = {
   scene: ObjectScene;
   overlay: PlaybackOverlay;
   redraw: () => void;
+  drawSelection: () => void;
 };
 
 /**
@@ -58,6 +62,16 @@ export default function PixiEditCanvas({
       edges.map((e) => `${e.id}:${e.source}>${e.target}`).join(","),
     [nodes, edges],
   );
+
+  // exactly one selected node / edge → show its inspector (like graph-canvas)
+  const selectedNodeId = useMemo(() => {
+    const sel = nodes.filter((n) => n.selected);
+    return sel.length === 1 ? sel[0].id : null;
+  }, [nodes]);
+  const selectedEdgeId = useMemo(() => {
+    const sel = edges.filter((e) => e.selected);
+    return sel.length === 1 ? sel[0].id : null;
+  }, [edges]);
 
   const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => {
@@ -119,6 +133,17 @@ export default function PixiEditCanvas({
         edgeRec: scene.edgeRec,
       });
       world.addChild(scene.nodesLayer, scene.nodeLabelsLayer);
+      const selLayer = new Graphics();
+      world.addChild(selLayer); // selection rings sit on top of everything
+
+      const canvas = app.canvas;
+      const screenToWorld = (clientX: number, clientY: number) => {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (clientX - rect.left - world.position.x) / world.scale.x,
+          y: (clientY - rect.top - world.position.y) / world.scale.y,
+        };
+      };
 
       const redraw = () => {
         drawGrid(gridG, world, app!.screen.width, app!.screen.height, pal.grid);
@@ -127,6 +152,31 @@ export default function PixiEditCanvas({
           x: world.position.x,
           y: world.position.y,
         };
+      };
+
+      // selection channel above the graph: a ring on the selected node / a
+      // thicker recolor on the selected edge (reads live selection from store)
+      const drawSelection = () => {
+        selLayer.clear();
+        const st = useEditorStore.getState();
+        const selNode = st.nodes.find((n) => n.selected);
+        if (selNode) {
+          const p = scene.nodePos(selNode.id);
+          if (p)
+            selLayer.circle(p.x, p.y, R + 3).stroke({ width: 2.5, color: pal.ring });
+        }
+        const selEdge = st.edges.find((e) => e.selected);
+        if (selEdge) {
+          const s = scene.nodePos(selEdge.source);
+          const t = scene.nodePos(selEdge.target);
+          if (s && t) {
+            const e = trimmedEnds(s, t, directed);
+            selLayer
+              .moveTo(e.x1, e.y1)
+              .lineTo(e.x2, e.y2)
+              .stroke({ width: 3.5, color: pal.ring });
+          }
+        }
       };
 
       const fit = () => {
@@ -148,51 +198,14 @@ export default function PixiEditCanvas({
       const s0 = useEditorStore.getState();
       scene.reconcile(s0.nodes, s0.edges);
 
-      // pan + zoom (editing gestures replace onDown in a later phase)
-      const canvas = app.canvas;
-      let dragging = false;
-      let lastX = 0;
-      let lastY = 0;
-      const onDown = (ev: PointerEvent) => {
-        if (ev.button !== 0) return;
-        dragging = true;
-        lastX = ev.clientX;
-        lastY = ev.clientY;
-        canvas.style.cursor = "grabbing";
-      };
-      const onMove = (ev: PointerEvent) => {
-        if (!dragging) return;
-        world.position.x += ev.clientX - lastX;
-        world.position.y += ev.clientY - lastY;
-        lastX = ev.clientX;
-        lastY = ev.clientY;
-        redraw();
-      };
-      const onUp = () => {
-        dragging = false;
-        canvas.style.cursor = "grab";
-      };
-      const onWheel = (ev: WheelEvent) => {
-        ev.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        const mx = ev.clientX - rect.left;
-        const my = ev.clientY - rect.top;
-        let dy = ev.deltaY;
-        if (ev.deltaMode === 1) dy *= 16;
-        else if (ev.deltaMode === 2) dy *= 100;
-        const factor = Math.min(1.2, Math.max(0.83, Math.exp(-dy * 0.0012)));
-        const next = Math.max(0.02, Math.min(8, world.scale.x * factor));
-        const wx = (mx - world.position.x) / world.scale.x;
-        const wy = (my - world.position.y) / world.scale.y;
-        world.scale.set(next);
-        world.position.set(mx - wx * next, my - wy * next);
-        redraw();
-      };
-      canvas.style.cursor = "grab";
-      canvas.addEventListener("pointerdown", onDown);
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      canvas.addEventListener("wheel", onWheel, { passive: false });
+      const detachInput = attachInteractions({
+        canvas,
+        world,
+        scene,
+        screenToWorld,
+        redraw,
+        refreshSelection: drawSelection,
+      });
 
       // restore the prior view on a theme rebuild; fit on a new graph
       if (!refit && viewRef.current) {
@@ -207,17 +220,15 @@ export default function PixiEditCanvas({
         else redraw();
       }, 80);
 
-      sceneRef.current = { scene, overlay, redraw };
+      sceneRef.current = { scene, overlay, redraw, drawSelection };
       overlay.decorate(s0.frames, s0.playhead);
+      drawSelection(); // reflect any selection that survived a rebuild
 
       teardown = () => {
         window.clearTimeout(settle);
         sceneRef.current = null;
+        detachInput();
         overlay.destroy();
-        canvas.removeEventListener("pointerdown", onDown);
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        canvas.removeEventListener("wheel", onWheel);
       };
     })();
 
@@ -244,6 +255,11 @@ export default function PixiEditCanvas({
     sceneRef.current?.overlay.decorate(frames, playhead);
   }, [frames, playhead]);
 
+  // selection changed → repaint the selection channel (imperative, no rebuild)
+  useEffect(() => {
+    sceneRef.current?.drawSelection();
+  }, [selectedNodeId, selectedEdgeId]);
+
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden">
       {showPlayback && (
@@ -253,8 +269,18 @@ export default function PixiEditCanvas({
           </div>
         </div>
       )}
+      {selectedNodeId ? (
+        <div className="absolute top-2 right-2 z-10">
+          <NodeInspector nodeId={selectedNodeId} />
+        </div>
+      ) : selectedEdgeId ? (
+        <div className="absolute top-2 right-2 z-10">
+          <EdgeInspector edgeId={selectedEdgeId} directed={directed} />
+        </div>
+      ) : null}
       <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-background/85 px-3 py-1 text-xs text-muted-foreground ring-1 ring-border">
-        Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges
+        Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges · drag to move
+        · click to select · ⌫ deletes
       </div>
     </div>
   );
