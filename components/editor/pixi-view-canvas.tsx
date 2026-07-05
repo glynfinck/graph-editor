@@ -176,9 +176,12 @@ export default function PixiViewCanvas({
       // labels on top
       const labels = new Container();
       for (const n of nodes) {
-        labels.addChild(
-          createNodeLabel(n.data.name, n.position.x, n.position.y, pal.text),
+        const label = createNodeLabel(n.data.name, pal.text, pal.bg, pal.border);
+        label.position.set(
+          n.position.x,
+          n.data.name.length <= 4 ? n.position.y : n.position.y + R + 12,
         );
+        labels.addChild(label);
       }
       world.addChild(labels);
 

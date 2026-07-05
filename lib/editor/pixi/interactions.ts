@@ -21,8 +21,8 @@ const RIM_R = 36;
 const SNAP_R = 36; // connect-target snap radius (React Flow's connectionRadius)
 const DRAG_PX = 4; // screen threshold separating a click from a drag
 const EDGE_HIT_PX = 7; // screen pick tolerance for selecting an edge
-const CONNECT_DASH = 6; // dashed in-progress connection line (world units)
-const CONNECT_GAP = 4;
+const CONNECT_DASH = 6; // dashed in-progress connection line (React Flow: "6 3")
+const CONNECT_GAP = 3;
 
 type Pending =
   | { kind: "pan"; sx: number; sy: number }

@@ -90,6 +90,8 @@ export type GraphPalette = {
   current: number;
   grid: number;
   ring: number;
+  /** connect/hover affordance color (React Flow uses --brand for this) */
+  brand: number;
 };
 
 export function resolvePalette(el: HTMLElement): GraphPalette {
@@ -116,5 +118,6 @@ export function resolvePalette(el: HTMLElement): GraphPalette {
     current: cssColor(el, "--graph-current", 0x8a63d2),
     grid: mix(bg, text, bgLum > 0.5 ? 0.4 : 0.34),
     ring: cssColor(el, "--ring", 0x8a63d2),
+    brand: cssColor(el, "--brand", 0x6366f1),
   };
 }

@@ -9,7 +9,7 @@
  * overlay recolors visited/path node circles yet the labels stay on top:
  *   edges → edge labels → [playback overlay] → node circles → node labels
  */
-import { BitmapText, Container, Graphics } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 
 import { edgeKey } from "@/lib/editor/frames";
 import type { GraphPalette } from "@/lib/editor/pixi/colors";
@@ -27,7 +27,7 @@ import {
 } from "@/lib/editor/pixi/labels";
 import type { GraphFlowEdge, GraphFlowNode } from "@/lib/editor/store";
 
-type NodeObj = { circle: Graphics; label: BitmapText; name: string };
+type NodeObj = { circle: Graphics; label: Container; name: string };
 type EdgeObj = {
   gfx: Graphics;
   source: string;
@@ -107,7 +107,7 @@ export function createObjectScene(opts: {
       .fill(c.node)
       .stroke({ width: 2, color: c.border });
     nodesLayer.addChild(circle);
-    const label = createNodeLabel(n.data.name, n.position.x, n.position.y, c.text);
+    const label = createNodeLabel(n.data.name, c.text, c.bg, c.border);
     nodeLabelsLayer.addChild(label);
     const o: NodeObj = { circle, label, name: n.data.name };
     placeNode(o, n.position.x, n.position.y);
@@ -162,8 +162,11 @@ export function createObjectScene(opts: {
   function setNodeLabel(id: string, name: string) {
     const o = nodesById.get(id);
     if (!o || o.name === name) return; // cheap no-op so a label pass can call it freely
+    // rebuild — a rename can cross the inside↔below threshold (pill on/off)
     o.name = name;
-    o.label.text = name;
+    o.label.destroy({ children: true });
+    o.label = createNodeLabel(name, c.text, c.bg, c.border);
+    nodeLabelsLayer.addChild(o.label);
     placeNode(o, o.circle.position.x, o.circle.position.y);
   }
 

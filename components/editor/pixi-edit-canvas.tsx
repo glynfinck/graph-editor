@@ -8,7 +8,7 @@ import { NodeInspector } from "@/components/editor/node-inspector";
 import { PlaybackControls } from "@/components/editor/playback-controls";
 import { createObjectScene, type ObjectScene } from "@/lib/editor/pixi/base-objects";
 import { resolvePalette } from "@/lib/editor/pixi/colors";
-import { fitBounds, R, trimmedEnds } from "@/lib/editor/pixi/geometry";
+import { arrowheadPoly, fitBounds, R, trimmedEnds } from "@/lib/editor/pixi/geometry";
 import { drawGrid } from "@/lib/editor/pixi/grid";
 import { attachInteractions } from "@/lib/editor/pixi/interactions";
 import {
@@ -194,6 +194,8 @@ export default function PixiEditCanvas({
               .moveTo(e.x1, e.y1)
               .lineTo(e.x2, e.y2)
               .stroke({ width: 3.5, color: pal.ring });
+            // recolor the arrowhead too, like React Flow's selected edge
+            if (directed) edgeSelLayer.poly(arrowheadPoly(s, t)).fill(pal.ring);
           }
         }
       };
@@ -223,7 +225,7 @@ export default function PixiEditCanvas({
         world,
         scene,
         connectLayer,
-        connectColor: pal.ring,
+        connectColor: pal.brand,
         screenToWorld,
         redraw,
         refreshSelection: drawSelection,
