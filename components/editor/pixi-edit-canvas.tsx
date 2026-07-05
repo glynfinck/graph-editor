@@ -127,11 +127,19 @@ export default function PixiEditCanvas({
       app.stage.addChild(world);
 
       const scene = createObjectScene({ palette: pal, directed });
-      // z-order: edges → edge selection → edge labels → [overlay] → node
-      // circles → node labels → node selection → hover/connect. The selected
-      // edge highlight sits UNDER its label so the weight stays readable.
+      // z-order: edges → edge selection → edge labels → node circles →
+      // [playback overlay] → node labels → node selection → hover/connect.
+      // The overlay must sit ABOVE the opaque node circles so visited/path/
+      // current NODES recolor (else only edges light up), but BELOW the node
+      // labels so names stay readable; the selected edge highlight sits under
+      // its label so the weight stays readable.
       const edgeSelLayer = new Graphics();
-      world.addChild(scene.edgesLayer, edgeSelLayer, scene.edgeLabelsLayer);
+      world.addChild(
+        scene.edgesLayer,
+        edgeSelLayer,
+        scene.edgeLabelsLayer,
+        scene.nodesLayer,
+      );
       const overlay = createPlaybackOverlay({
         world,
         ticker: app.ticker,
@@ -140,7 +148,7 @@ export default function PixiEditCanvas({
         nodePos: scene.nodePos,
         edgeRec: scene.edgeRec,
       });
-      world.addChild(scene.nodesLayer, scene.nodeLabelsLayer);
+      world.addChild(scene.nodeLabelsLayer);
       const selLayer = new Graphics();
       world.addChild(selLayer); // selection rings sit on top of everything
       const connectLayer = new Graphics();
