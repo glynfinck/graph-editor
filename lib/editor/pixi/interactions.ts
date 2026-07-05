@@ -6,7 +6,7 @@
  * with what's under the pointer — so connecting from a rim is discoverable.
  * Rendering side effects go through the passed handles; this module is React-free.
  */
-import type { Container, Graphics } from "pixi.js";
+import type { Container, Graphics, Ticker } from "pixi.js";
 import { toast } from "sonner";
 
 import type { ObjectScene } from "@/lib/editor/pixi/base-objects";
@@ -23,6 +23,15 @@ const DRAG_PX = 4; // screen threshold separating a click from a drag
 const EDGE_HIT_PX = 7; // screen pick tolerance for selecting an edge
 const CONNECT_DASH = 6; // dashed in-progress connection line (React Flow: "6 3")
 const CONNECT_GAP = 3;
+// Hover ring — the "concentric breathe": a soft brand ring outside the node
+// that scales 1→1.08 over 1.5s (the old React Flow node-connect-hint pulse).
+// Selection is a crisp static --ring circle at R+3; the hover ring bases
+// OUTSIDE it when the node is selected so the two channels never collide.
+const PULSE_MS = 1500;
+const PULSE_SCALE = 0.08;
+const HOVER_ALPHA = 0.6; // brand/60, like the old border-brand/60
+const HOVER_BASE = 32; // R+4 — hugs the rim (unselected)
+const HOVER_BASE_SELECTED = 35; // R+7 — steps outside the selection ring
 
 type Pending =
   | { kind: "pan"; sx: number; sy: number }
@@ -36,6 +45,8 @@ export function attachInteractions(opts: {
   canvas: HTMLCanvasElement;
   world: Container;
   scene: ObjectScene;
+  /** drives the breathing hover ring */
+  ticker: Ticker;
   /** top layer for the hover ring and in-progress connection line */
   connectLayer: Graphics;
   connectColor: number;
@@ -50,6 +61,7 @@ export function attachInteractions(opts: {
     canvas,
     world,
     scene,
+    ticker,
     connectLayer,
     connectColor,
     screenToWorld,
@@ -62,38 +74,57 @@ export function attachInteractions(opts: {
   let lastX = 0;
   let lastY = 0;
   let hovering = false;
-  // hover affordance: which node (and zone) the idle pointer is over
+  // hover affordance: which node the idle pointer is over (any zone — the
+  // cursor alone distinguishes move-body from connect-rim, like React Flow)
   let hoverId: string | null = null;
-  let hoverZone: "body" | "rim" | null = null;
+  let pulseT = 0;
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const drawHover = () => {
     connectLayer.clear();
     if (!hoverId) return;
     const p = scene.nodePos(hoverId);
     if (!p) return;
-    // a ring hugging the rim signals "you can drag from here to connect"
+    // concentric breathe: soft brand ring that scales 1→1.08 (ease-in-out via
+    // cosine), basing outside the crisp selection ring when the node is
+    // selected so the two never collide
+    const selected = useEditorStore
+      .getState()
+      .nodes.some((n) => n.id === hoverId && n.selected);
+    const base = selected ? HOVER_BASE_SELECTED : HOVER_BASE;
+    const wave = reducedMotion
+      ? 0
+      : 0.5 - 0.5 * Math.cos((2 * Math.PI * pulseT) / PULSE_MS);
     connectLayer
-      .circle(p.x, p.y, R + 2)
-      .stroke({ width: 2, color: connectColor, alpha: hoverZone === "rim" ? 0.9 : 0.4 });
+      .circle(p.x, p.y, base * (1 + PULSE_SCALE * wave))
+      .stroke({ width: 2, color: connectColor, alpha: HOVER_ALPHA });
   };
+
+  // breathe only while idle-hovering (a drag repurposes the layer)
+  const animateHover = () => {
+    if (!hoverId || pending || reducedMotion) return;
+    pulseT += ticker.deltaMS;
+    drawHover();
+  };
+  ticker.add(animateHover);
 
   const updateHover = (clientX: number, clientY: number) => {
     const w = screenToWorld(clientX, clientY);
     const hit = scene.hitNode(w.x, w.y, RIM_R);
     let id: string | null = null;
-    let zone: "body" | "rim" | null = null;
     let cursor = "grab";
     if (hit) {
       id = hit.id;
-      zone = hit.dist <= MOVE_R ? "body" : "rim";
-      cursor = zone === "rim" ? "crosshair" : "grab";
+      cursor = hit.dist <= MOVE_R ? "grab" : "crosshair";
     } else if (scene.hitEdge(w.x, w.y, EDGE_HIT_PX / world.scale.x)) {
       cursor = "pointer";
     }
     container.style.cursor = cursor;
-    if (id !== hoverId || zone !== hoverZone) {
+    if (id !== hoverId) {
       hoverId = id;
-      hoverZone = zone;
+      pulseT = 0; // each hover starts at rest (scale 1) and breathes out
       drawHover();
     }
   };
@@ -101,7 +132,6 @@ export function attachInteractions(opts: {
   const clearHover = () => {
     if (hoverId) {
       hoverId = null;
-      hoverZone = null;
       connectLayer.clear();
     }
   };
@@ -314,6 +344,7 @@ export function attachInteractions(opts: {
   window.addEventListener("keydown", onKey);
 
   return () => {
+    ticker.remove(animateHover);
     canvas.removeEventListener("pointerdown", onDown);
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);

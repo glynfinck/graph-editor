@@ -224,6 +224,7 @@ export default function PixiEditCanvas({
         canvas,
         world,
         scene,
+        ticker: app.ticker,
         connectLayer,
         connectColor: pal.brand,
         screenToWorld,
