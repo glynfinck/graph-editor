@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { Graph } from "@/lib/data/graphs";
+import type { GraphSummary } from "@/lib/data/graphs";
 import { formatRelativeTime } from "@/lib/format";
 
 export function GraphCard({
@@ -18,12 +18,10 @@ export function GraphCard({
   canDelete,
   signedIn,
 }: {
-  graph: Graph;
+  graph: GraphSummary;
   canDelete: boolean;
   signedIn: boolean;
 }) {
-  const doc = graph.doc;
-
   return (
     <Card className="group relative gap-3 transition-colors hover:border-ring/40">
       <CardHeader>
@@ -58,10 +56,10 @@ export function GraphCard({
             </Badge>
           )}
           <span className="flex items-center gap-1">
-            <CircleDot className="size-3" /> {doc.nodes.length}
+            <CircleDot className="size-3" /> {graph.nodeCount}
           </span>
           <span className="flex items-center gap-1">
-            <Spline className="size-3" /> {doc.edges.length}
+            <Spline className="size-3" /> {graph.edgeCount}
           </span>
           {graph.is_public && (
             <GraphLikeButton

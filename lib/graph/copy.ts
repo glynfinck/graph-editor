@@ -3,6 +3,7 @@
  * post-fork flow. Deliberately NOT a "use server" module — these take a
  * Supabase client and are not client-callable endpoints.
  */
+import { getGraphDoc } from "@/lib/data/graphs";
 import type { GraphDoc } from "@/lib/graph/types";
 import type { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
@@ -45,7 +46,7 @@ export async function copyGraph(
 ): Promise<{ id: string } | { error: string }> {
   const { data: source, error: readError } = await supabase
     .from("graphs")
-    .select("name, description, directed, graph_nodes(*), graph_edges(*)")
+    .select("name, description, directed")
     .eq("id", sourceId)
     .maybeSingle();
   if (readError) return { error: readError.message };
@@ -63,21 +64,9 @@ export async function copyGraph(
     .single();
   if (error) return { error: error.message };
 
-  const docError = await replaceDoc(supabase, data.id, {
-    nodes: source.graph_nodes.map((n) => ({
-      id: n.id,
-      name: n.name,
-      x: n.x,
-      y: n.y,
-    })),
-    edges: source.graph_edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      weight: e.weight,
-      name: e.name,
-    })),
-  });
+  // page the source doc in (a big graph exceeds a single request's row cap)
+  const doc = await getGraphDoc(supabase, sourceId);
+  const docError = await replaceDoc(supabase, data.id, docToJson(doc));
   if (docError) {
     await supabase.from("graphs").delete().eq("id", data.id);
     return { error: docError };
