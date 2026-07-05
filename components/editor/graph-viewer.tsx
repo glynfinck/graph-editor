@@ -4,12 +4,11 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { ArrowLeft, Copy, Loader2, Save, Sparkles } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Lock, Save, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { DirectedToggle } from "@/components/editor/directed-toggle";
 import { GraphCanvas } from "@/components/editor/graph-canvas";
-import { ReadOnlyOverlay } from "@/components/editor/read-only-overlay";
 
 // EXPERIMENT: WebGL renderer, client-only (needs the DOM/WebGL), lazy-loaded so
 // pixi.js stays out of the bundle until you flip to it.
@@ -136,6 +135,12 @@ export function GraphViewer({
             {graph.is_public ? "Public" : "Private"}
           </Badge>
         )}
+        {!canEdit && (
+          <Badge variant="secondary" className="gap-1 font-normal">
+            <Lock className="size-3" />
+            Read-only
+          </Badge>
+        )}
         {graph.is_public && (
           <GraphLikeButton
             graphId={graph.id}
@@ -183,19 +188,11 @@ export function GraphViewer({
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1">
+      <div className="min-h-0 flex-1">
         {pixi ? (
           <PixiGraphCanvas editable={canEdit} />
         ) : (
           <GraphCanvas editable={canEdit} showPlayback={false} />
-        )}
-        {!canEdit && (
-          <ReadOnlyOverlay
-            isSample={graph.is_sample}
-            canCopy
-            copying={copying}
-            onCopy={duplicate}
-          />
         )}
       </div>
     </div>

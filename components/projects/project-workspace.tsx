@@ -13,6 +13,7 @@ import {
   Highlighter,
   Loader2,
   LocateFixed,
+  Lock,
   PanelRight,
   PinOff,
   Play,
@@ -29,7 +30,6 @@ import { toast } from "sonner";
 import { ConsolePanel } from "@/components/editor/console-panel";
 import { DirectedToggle } from "@/components/editor/directed-toggle";
 import { GraphCanvas } from "@/components/editor/graph-canvas";
-import { ReadOnlyOverlay } from "@/components/editor/read-only-overlay";
 
 // EXPERIMENT: WebGL renderer, client-only (needs the DOM/WebGL), lazy-loaded so
 // pixi.js stays out of the bundle until you flip to it.
@@ -37,6 +37,7 @@ const PixiGraphCanvas = dynamic(
   () => import("@/components/editor/pixi-graph-canvas"),
   { ssr: false },
 );
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -464,6 +465,15 @@ export function ProjectWorkspace({
               )}
             </SelectContent>
           </Select>
+          {activeGraph && !canEditGraph && (
+            <Badge
+              variant="secondary"
+              className="gap-1 font-normal whitespace-nowrap"
+            >
+              <Lock className="size-3" />
+              Read-only
+            </Badge>
+          )}
           {userId && (
             <Tip label="New test graph">
               <Button
@@ -714,25 +724,14 @@ export function ProjectWorkspace({
                   <Skeleton className="h-full w-full rounded-lg" />
                 </div>
               ) : activeGraph ? (
-                <div className="relative h-full w-full">
-                  {pixi ? (
-                    // EXPERIMENT: WebGL renderer with live playback + editing
-                    <PixiGraphCanvas editable={canEditGraph} showPlayback />
-                  ) : (
-                    // canvas edits are runnable immediately; Save persists them
-                    // when the graph is the caller's own
-                    <GraphCanvas editable={canEditGraph} />
-                  )}
-                  {!canEditGraph && (
-                    <ReadOnlyOverlay
-                      isSample={activeGraph.is_sample}
-                      canCopy={!!userId}
-                      copying={copying}
-                      onCopy={copyActiveGraph}
-                      hasPlaybackBar
-                    />
-                  )}
-                </div>
+                pixi ? (
+                  // EXPERIMENT: WebGL renderer with live playback + editing
+                  <PixiGraphCanvas editable={canEditGraph} showPlayback />
+                ) : (
+                  // canvas edits are runnable immediately; Save persists them
+                  // when the graph is the caller's own
+                  <GraphCanvas editable={canEditGraph} />
+                )
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Waypoints className="size-6" />
