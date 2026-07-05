@@ -13,15 +13,23 @@ export function ReadOnlyOverlay({
   canCopy,
   copying,
   onCopy,
+  hasPlaybackBar = false,
 }: {
   isSample: boolean;
   /** show the "Copy to edit" action (a signed-in user can make their own copy) */
   canCopy: boolean;
   copying: boolean;
   onCopy: () => void;
+  /** drop below the top-center playback bar so they don't overlap on a narrow
+   * canvas (the bar can reach the corner) */
+  hasPlaybackBar?: boolean;
 }) {
   return (
-    <div className="pointer-events-none absolute top-2 left-2 z-20">
+    <div
+      className={`pointer-events-none absolute left-2 z-20 ${
+        hasPlaybackBar ? "top-14" : "top-2"
+      }`}
+    >
       <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border bg-background/90 px-3 py-1 text-xs shadow-sm backdrop-blur">
         <Lock className="size-3 text-muted-foreground" />
         <span className="text-muted-foreground">

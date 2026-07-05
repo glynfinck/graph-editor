@@ -729,6 +729,7 @@ export function ProjectWorkspace({
                       canCopy={!!userId}
                       copying={copying}
                       onCopy={copyActiveGraph}
+                      hasPlaybackBar
                     />
                   )}
                 </div>
