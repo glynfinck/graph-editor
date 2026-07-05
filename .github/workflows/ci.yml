@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# One run per ref; a newer push supersedes an in-flight one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # verify: lint + unit tests + typecheck + RLS matrix + build against a real,
+  # local Supabase spun up in the runner. Runs on every PR and push to main.
+  # ---------------------------------------------------------------------------
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 22+: @supabase/supabase-js needs a native WebSocket
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: |
+          supabase start
+          supabase db reset   # deterministic: re-applies migrations + seed
+
+      - name: Point the app at local Supabase
+        run: |
+          STATUS=$(supabase status -o json)
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(jq -r .API_URL <<<"$STATUS")"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(jq -r .ANON_KEY <<<"$STATUS")"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(jq -r .SERVICE_ROLE_KEY <<<"$STATUS")"
+            echo "NEXT_PUBLIC_SITE_URL=http://localhost:3000"
+          } >> .env.local
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Integration tests (RLS isolation)
+        run: npm run test:integration
+
+      - name: Build
+        run: npm run build
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup || true
+
+  # ---------------------------------------------------------------------------
+  # migrate: push migrations to the production Supabase project. App deploys
+  # are handled by Vercel (production branch = main), so there is no deploy
+  # job here. Only on push to main, only after verify passes — migration
+  # validity is already proven by verify's `supabase db reset` on a fresh DB.
+  #
+  # This job only ever runs `db push` (additive, tracked, transactional) —
+  # never `db reset`. It skips cleanly until the Supabase secrets exist, so
+  # the pipeline is green before you've finished wiring credentials.
+  # ---------------------------------------------------------------------------
+  migrate:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: production-migrate # never overlap prod migrations
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Supabase secrets
+        id: guard
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          PW: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$REF" ] && [ -n "$PW" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Migrations skipped::Add SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF and SUPABASE_DB_PASSWORD secrets to enable production migrations."
+          fi
+
+      - uses: supabase/setup-cli@v1
+        if: steps.guard.outputs.ready == 'true'
+        with:
+          version: latest
+
+      - name: Link project
+        if: steps.guard.outputs.ready == 'true'
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      - name: Show migration state & plan
+        if: steps.guard.outputs.ready == 'true'
+        run: |
+          echo "::group::Applied vs. pending"
+          supabase migration list --password "${{ secrets.SUPABASE_DB_PASSWORD }}" || true
+          echo "::endgroup::"
+          echo "::group::Dry run (statements that will be applied)"
+          supabase db push --dry-run --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+          echo "::endgroup::"
+
+      - name: Apply migrations
+        if: steps.guard.outputs.ready == 'true'
+        run: supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"

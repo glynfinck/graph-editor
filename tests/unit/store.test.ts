@@ -1,0 +1,132 @@
+import { beforeEach, describe, expect, it } from "vitest";
+
+import type { Frame } from "@/lib/editor/frames";
+import { useEditorStore } from "@/lib/editor/store";
+
+const line = (n: number): Frame => ({ kind: "line", line: n });
+const node = (id: string): Frame => ({
+  kind: "node",
+  id,
+  peek: false,
+  path: false,
+});
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+describe("client-minted ids are uuids", () => {
+  // regression: node/edge id columns are uuid, so freshId() must mint uuids —
+  // otherwise saving a locally-edited graph fails casting "n..." to uuid.
+  it("addNodeAt and connect produce uuid ids", () => {
+    const store = useEditorStore.getState();
+    store.init("g1", "graph", "", false, { nodes: [], edges: [] });
+    store.addNodeAt(0, 0);
+    store.addNodeAt(100, 0);
+    const [a, b] = useEditorStore.getState().nodes;
+    store.connect(a.id, b.id);
+
+    const doc = useEditorStore.getState().toDoc();
+    expect(doc.nodes[0].id).toMatch(UUID_RE);
+    expect(doc.nodes[1].id).toMatch(UUID_RE);
+    expect(doc.edges[0].id).toMatch(UUID_RE);
+  });
+});
+
+describe("event-granularity stepping", () => {
+  // positions after a graph event: 1 (node), 4 (node), 6 (clear)
+  const frames: Frame[] = [
+    node("n1"),
+    line(2),
+    line(3),
+    node("n2"),
+    line(4),
+    { kind: "clear" },
+  ];
+
+  beforeEach(() => {
+    useEditorStore.setState({
+      frames,
+      playhead: 0,
+      playing: false,
+      status: "ready",
+      speed: 60,
+    });
+  });
+
+  it("stepForward stops just after the next graph event", () => {
+    const step = () => useEditorStore.getState().stepForward();
+    step();
+    expect(useEditorStore.getState().playhead).toBe(1);
+    step();
+    expect(useEditorStore.getState().playhead).toBe(4);
+    step();
+    expect(useEditorStore.getState().playhead).toBe(6);
+    step(); // clamped at the end
+    expect(useEditorStore.getState().playhead).toBe(6);
+  });
+
+  it("stepBack returns to the previous graph event", () => {
+    useEditorStore.setState({ playhead: 6 });
+    const step = () => useEditorStore.getState().stepBack();
+    step();
+    expect(useEditorStore.getState().playhead).toBe(4);
+    step();
+    expect(useEditorStore.getState().playhead).toBe(1);
+    step();
+    expect(useEditorStore.getState().playhead).toBe(0);
+  });
+
+  it("stepBack from between events (scrubbed there) lands on the previous one", () => {
+    useEditorStore.setState({ playhead: 3 });
+    useEditorStore.getState().stepBack();
+    expect(useEditorStore.getState().playhead).toBe(1);
+  });
+
+  it("stepping pauses playback", () => {
+    useEditorStore.setState({ playing: true });
+    useEditorStore.getState().stepForward();
+    expect(useEditorStore.getState().playing).toBe(false);
+  });
+
+  it("tick absorbs line frames so code and canvas advance together", () => {
+    useEditorStore.setState({ playing: true });
+    const tick = () => useEditorStore.getState().tick();
+    tick();
+    expect(useEditorStore.getState().playhead).toBe(1);
+    expect(useEditorStore.getState().playing).toBe(true);
+    tick();
+    expect(useEditorStore.getState().playhead).toBe(4);
+    tick();
+    expect(useEditorStore.getState().playhead).toBe(6);
+    expect(useEditorStore.getState().playing).toBe(false); // reached the end
+  });
+
+  it("takes bigger strides at the rabbit end of the speed slider", () => {
+    useEditorStore.setState({ playing: true, speed: 100 });
+    useEditorStore.getState().tick();
+    // max-speed stride swallows all three graph events in a single tick
+    expect(useEditorStore.getState().playhead).toBe(6);
+    expect(useEditorStore.getState().playing).toBe(false);
+  });
+
+  it("keeps playing at the frontier while frames are still streaming", () => {
+    useEditorStore.setState({
+      frames: [node("n1")],
+      playing: true,
+      status: "running",
+    });
+    const tick = () => useEditorStore.getState().tick();
+    tick(); // caught up with the stream — waits, doesn't stop
+    expect(useEditorStore.getState().playhead).toBe(1);
+    expect(useEditorStore.getState().playing).toBe(true);
+
+    useEditorStore.getState().pushFrames([line(2), node("n2")]);
+    tick();
+    expect(useEditorStore.getState().playhead).toBe(3);
+    expect(useEditorStore.getState().playing).toBe(true);
+
+    useEditorStore.setState({ status: "ready" }); // run finished
+    tick();
+    expect(useEditorStore.getState().playing).toBe(false);
+  });
+});

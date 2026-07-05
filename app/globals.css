@@ -1,0 +1,554 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-figtree);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-heading: var(--font-figtree);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-graph-node: var(--graph-node);
+  --color-graph-node-border: var(--graph-node-border);
+  --color-graph-current: var(--graph-current);
+  --color-graph-visited: var(--graph-visited);
+  --color-graph-visited-border: var(--graph-visited-border);
+  --color-graph-path: var(--graph-path);
+  --color-graph-path-fill: var(--graph-path-fill);
+  --color-graph-edge: var(--graph-edge);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ---------------------------------------------------------------------------
+ * Identity: pastel & muted, light-first, nothing terminal about it.
+ *
+ * Four selectable palettes share the same token slots — the palette picker
+ * stamps data-palette on <html>, dark mode stamps .dark, and everything
+ * (including the canvas states) recolors through the variables. Each palette
+ * keeps the app's one hard rule: the three algorithm states — cursor,
+ * visited, path — are pastel fills with deeper ink borders, always tellable
+ * apart.
+ *
+ *   (default)          Gouache      warm ivory · sage · lilac/blue/apricot
+ *   [data-palette="sea-glass"]      cool mist · teal · periwinkle/seafoam/coral
+ *   [data-palette="riso"]           warm white · dusty rose · rose/indigo/marigold
+ *   [data-palette="clay"]           linen · moss · plum/moss/ochre
+ * ------------------------------------------------------------------------- */
+
+/* ------------------------------- Gouache (default) ---------------------- */
+:root {
+  --background: oklch(0.975 0.009 90);
+  --foreground: oklch(0.32 0.02 60);
+  --card: oklch(0.99 0.005 95);
+  --card-foreground: oklch(0.32 0.02 60);
+  --popover: oklch(0.99 0.005 95);
+  --popover-foreground: oklch(0.32 0.02 60);
+  --primary: oklch(0.55 0.07 150);
+  --primary-foreground: oklch(0.985 0.005 95);
+  --secondary: oklch(0.94 0.014 92);
+  --secondary-foreground: oklch(0.35 0.02 65);
+  --muted: oklch(0.945 0.012 90);
+  --muted-foreground: oklch(0.52 0.018 70);
+  --accent: oklch(0.928 0.018 130);
+  --accent-foreground: oklch(0.32 0.02 60);
+  --destructive: oklch(0.6 0.17 25);
+  --border: oklch(0.895 0.014 85);
+  --input: oklch(0.885 0.014 85);
+  --ring: oklch(0.6 0.08 150);
+  --brand: oklch(0.55 0.07 150);
+  --chart-1: oklch(0.55 0.07 150);
+  --chart-2: oklch(0.6 0.1 300);
+  --chart-3: oklch(0.6 0.09 235);
+  --chart-4: oklch(0.66 0.12 62);
+  --chart-5: oklch(0.52 0.018 70);
+  --radius: 0.85rem;
+  --sidebar: oklch(0.99 0.005 95);
+  --sidebar-foreground: oklch(0.32 0.02 60);
+  --sidebar-primary: oklch(0.55 0.07 150);
+  --sidebar-primary-foreground: oklch(0.985 0.005 95);
+  --sidebar-accent: oklch(0.928 0.018 130);
+  --sidebar-accent-foreground: oklch(0.32 0.02 60);
+  --sidebar-border: oklch(0.895 0.014 85);
+  --sidebar-ring: oklch(0.6 0.08 150);
+
+  --graph-node: oklch(0.99 0.005 95);
+  --graph-node-border: oklch(0.75 0.02 80);
+  --graph-current: oklch(0.6 0.1 300);
+  --graph-visited: oklch(0.9 0.045 235);
+  --graph-visited-border: oklch(0.6 0.09 235);
+  --graph-path: oklch(0.66 0.12 62);
+  --graph-path-fill: oklch(0.86 0.085 70);
+  --graph-edge: oklch(0.83 0.02 80);
+}
+
+.dark {
+  --background: oklch(0.225 0.012 65);
+  --foreground: oklch(0.93 0.012 85);
+  --card: oklch(0.265 0.013 70);
+  --card-foreground: oklch(0.93 0.012 85);
+  --popover: oklch(0.265 0.013 70);
+  --popover-foreground: oklch(0.93 0.012 85);
+  --primary: oklch(0.72 0.07 150);
+  --primary-foreground: oklch(0.2 0.012 65);
+  --secondary: oklch(0.31 0.014 70);
+  --secondary-foreground: oklch(0.93 0.012 85);
+  --muted: oklch(0.295 0.013 70);
+  --muted-foreground: oklch(0.7 0.015 80);
+  --accent: oklch(0.32 0.018 110);
+  --accent-foreground: oklch(0.93 0.012 85);
+  --destructive: oklch(0.7 0.19 22);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.07 150);
+  --brand: oklch(0.72 0.07 150);
+  --chart-1: oklch(0.72 0.07 150);
+  --chart-2: oklch(0.75 0.1 300);
+  --chart-3: oklch(0.74 0.08 235);
+  --chart-4: oklch(0.78 0.1 70);
+  --chart-5: oklch(0.7 0.015 80);
+  --sidebar: oklch(0.265 0.013 70);
+  --sidebar-foreground: oklch(0.93 0.012 85);
+  --sidebar-primary: oklch(0.72 0.07 150);
+  --sidebar-primary-foreground: oklch(0.2 0.012 65);
+  --sidebar-accent: oklch(0.32 0.018 110);
+  --sidebar-accent-foreground: oklch(0.93 0.012 85);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.72 0.07 150);
+
+  --graph-node: oklch(0.28 0.014 70);
+  --graph-node-border: oklch(0.52 0.018 75);
+  --graph-current: oklch(0.75 0.1 300);
+  --graph-visited: oklch(0.46 0.055 235 / 55%);
+  --graph-visited-border: oklch(0.74 0.08 235);
+  --graph-path: oklch(0.78 0.1 70);
+  --graph-path-fill: oklch(0.78 0.1 70);
+  --graph-edge: oklch(0.42 0.015 70);
+}
+
+/* ------------------------------- Sea Glass ------------------------------ */
+[data-palette="sea-glass"] {
+  --background: oklch(0.972 0.007 210);
+  --foreground: oklch(0.3 0.03 230);
+  --card: oklch(0.988 0.004 210);
+  --card-foreground: oklch(0.3 0.03 230);
+  --popover: oklch(0.988 0.004 210);
+  --popover-foreground: oklch(0.3 0.03 230);
+  --primary: oklch(0.55 0.07 200);
+  --primary-foreground: oklch(0.985 0.004 210);
+  --secondary: oklch(0.936 0.012 212);
+  --secondary-foreground: oklch(0.33 0.03 228);
+  --muted: oklch(0.94 0.011 212);
+  --muted-foreground: oklch(0.52 0.03 225);
+  --accent: oklch(0.925 0.02 195);
+  --accent-foreground: oklch(0.3 0.03 230);
+  --border: oklch(0.895 0.014 215);
+  --input: oklch(0.885 0.014 215);
+  --ring: oklch(0.6 0.08 200);
+  --brand: oklch(0.55 0.07 200);
+  --chart-1: oklch(0.55 0.07 200);
+  --chart-2: oklch(0.58 0.1 278);
+  --chart-3: oklch(0.57 0.085 182);
+  --chart-4: oklch(0.65 0.11 40);
+  --chart-5: oklch(0.52 0.03 225);
+
+  --graph-node: oklch(0.988 0.004 210);
+  --graph-node-border: oklch(0.74 0.025 220);
+  --graph-current: oklch(0.58 0.1 278);
+  --graph-visited: oklch(0.9 0.05 178);
+  --graph-visited-border: oklch(0.57 0.085 182);
+  --graph-path: oklch(0.65 0.11 40);
+  --graph-path-fill: oklch(0.84 0.08 45);
+  --graph-edge: oklch(0.83 0.02 220);
+}
+
+.dark[data-palette="sea-glass"] {
+  --background: oklch(0.23 0.025 235);
+  --foreground: oklch(0.93 0.01 210);
+  --card: oklch(0.27 0.027 235);
+  --card-foreground: oklch(0.93 0.01 210);
+  --popover: oklch(0.27 0.027 235);
+  --popover-foreground: oklch(0.93 0.01 210);
+  --primary: oklch(0.72 0.07 195);
+  --primary-foreground: oklch(0.2 0.02 235);
+  --secondary: oklch(0.315 0.028 235);
+  --secondary-foreground: oklch(0.93 0.01 210);
+  --muted: oklch(0.3 0.027 235);
+  --muted-foreground: oklch(0.7 0.02 220);
+  --accent: oklch(0.33 0.03 220);
+  --accent-foreground: oklch(0.93 0.01 210);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.07 195);
+  --brand: oklch(0.72 0.07 195);
+  --chart-1: oklch(0.72 0.07 195);
+  --chart-2: oklch(0.74 0.1 278);
+  --chart-3: oklch(0.75 0.08 180);
+  --chart-4: oklch(0.78 0.09 45);
+  --chart-5: oklch(0.7 0.02 220);
+
+  --graph-node: oklch(0.29 0.028 235);
+  --graph-node-border: oklch(0.52 0.03 230);
+  --graph-current: oklch(0.74 0.1 278);
+  --graph-visited: oklch(0.43 0.06 185 / 55%);
+  --graph-visited-border: oklch(0.75 0.08 180);
+  --graph-path: oklch(0.78 0.09 45);
+  --graph-path-fill: oklch(0.78 0.09 45);
+  --graph-edge: oklch(0.42 0.03 230);
+}
+
+/* ------------------------------- Riso Print ----------------------------- */
+[data-palette="riso"] {
+  --background: oklch(0.978 0.006 85);
+  --foreground: oklch(0.3 0.02 280);
+  --card: oklch(0.99 0.004 85);
+  --card-foreground: oklch(0.3 0.02 280);
+  --popover: oklch(0.99 0.004 85);
+  --popover-foreground: oklch(0.3 0.02 280);
+  --primary: oklch(0.62 0.1 15);
+  --primary-foreground: oklch(0.985 0.004 85);
+  --secondary: oklch(0.94 0.01 85);
+  --secondary-foreground: oklch(0.33 0.02 282);
+  --muted: oklch(0.945 0.009 85);
+  --muted-foreground: oklch(0.52 0.02 285);
+  --accent: oklch(0.93 0.02 20);
+  --accent-foreground: oklch(0.3 0.02 280);
+  --border: oklch(0.9 0.012 85);
+  --input: oklch(0.89 0.012 85);
+  --ring: oklch(0.66 0.09 15);
+  --brand: oklch(0.62 0.1 15);
+  --chart-1: oklch(0.62 0.1 15);
+  --chart-2: oklch(0.58 0.1 285);
+  --chart-3: oklch(0.68 0.12 78);
+  --chart-4: oklch(0.6 0.13 12);
+  --chart-5: oklch(0.52 0.02 285);
+
+  --graph-node: oklch(0.99 0.004 85);
+  --graph-node-border: oklch(0.76 0.02 290);
+  --graph-current: oklch(0.6 0.13 12);
+  --graph-visited: oklch(0.89 0.045 285);
+  --graph-visited-border: oklch(0.58 0.1 285);
+  --graph-path: oklch(0.68 0.12 78);
+  --graph-path-fill: oklch(0.87 0.095 85);
+  --graph-edge: oklch(0.84 0.015 290);
+}
+
+.dark[data-palette="riso"] {
+  --background: oklch(0.235 0.015 300);
+  --foreground: oklch(0.93 0.008 300);
+  --card: oklch(0.275 0.016 300);
+  --card-foreground: oklch(0.93 0.008 300);
+  --popover: oklch(0.275 0.016 300);
+  --popover-foreground: oklch(0.93 0.008 300);
+  --primary: oklch(0.74 0.09 15);
+  --primary-foreground: oklch(0.21 0.015 300);
+  --secondary: oklch(0.32 0.016 300);
+  --secondary-foreground: oklch(0.93 0.008 300);
+  --muted: oklch(0.305 0.016 300);
+  --muted-foreground: oklch(0.7 0.015 295);
+  --accent: oklch(0.33 0.02 320);
+  --accent-foreground: oklch(0.93 0.008 300);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.74 0.09 15);
+  --brand: oklch(0.74 0.09 15);
+  --chart-1: oklch(0.74 0.09 15);
+  --chart-2: oklch(0.74 0.08 285);
+  --chart-3: oklch(0.8 0.1 85);
+  --chart-4: oklch(0.72 0.11 12);
+  --chart-5: oklch(0.7 0.015 295);
+
+  --graph-node: oklch(0.295 0.017 300);
+  --graph-node-border: oklch(0.53 0.02 295);
+  --graph-current: oklch(0.72 0.11 12);
+  --graph-visited: oklch(0.45 0.055 285 / 55%);
+  --graph-visited-border: oklch(0.74 0.08 285);
+  --graph-path: oklch(0.8 0.1 85);
+  --graph-path-fill: oklch(0.8 0.1 85);
+  --graph-edge: oklch(0.43 0.02 295);
+}
+
+/* ------------------------------- Clay & Moss ---------------------------- */
+[data-palette="clay"] {
+  --background: oklch(0.968 0.011 80);
+  --foreground: oklch(0.31 0.02 70);
+  --card: oklch(0.985 0.007 82);
+  --card-foreground: oklch(0.31 0.02 70);
+  --popover: oklch(0.985 0.007 82);
+  --popover-foreground: oklch(0.31 0.02 70);
+  --primary: oklch(0.52 0.07 130);
+  --primary-foreground: oklch(0.98 0.007 82);
+  --secondary: oklch(0.935 0.014 82);
+  --secondary-foreground: oklch(0.34 0.02 72);
+  --muted: oklch(0.94 0.013 80);
+  --muted-foreground: oklch(0.52 0.02 75);
+  --accent: oklch(0.925 0.02 110);
+  --accent-foreground: oklch(0.31 0.02 70);
+  --border: oklch(0.89 0.014 80);
+  --input: oklch(0.88 0.014 80);
+  --ring: oklch(0.57 0.08 130);
+  --brand: oklch(0.52 0.07 130);
+  --chart-1: oklch(0.52 0.07 130);
+  --chart-2: oklch(0.55 0.1 330);
+  --chart-3: oklch(0.65 0.11 72);
+  --chart-4: oklch(0.55 0.08 132);
+  --chart-5: oklch(0.52 0.02 75);
+
+  --graph-node: oklch(0.985 0.007 82);
+  --graph-node-border: oklch(0.75 0.02 80);
+  --graph-current: oklch(0.55 0.1 330);
+  --graph-visited: oklch(0.88 0.045 130);
+  --graph-visited-border: oklch(0.55 0.08 132);
+  --graph-path: oklch(0.65 0.11 72);
+  --graph-path-fill: oklch(0.85 0.09 78);
+  --graph-edge: oklch(0.83 0.02 85);
+}
+
+.dark[data-palette="clay"] {
+  --background: oklch(0.23 0.014 55);
+  --foreground: oklch(0.93 0.01 80);
+  --card: oklch(0.27 0.015 60);
+  --card-foreground: oklch(0.93 0.01 80);
+  --popover: oklch(0.27 0.015 60);
+  --popover-foreground: oklch(0.93 0.01 80);
+  --primary: oklch(0.7 0.075 130);
+  --primary-foreground: oklch(0.2 0.014 55);
+  --secondary: oklch(0.315 0.016 62);
+  --secondary-foreground: oklch(0.93 0.01 80);
+  --muted: oklch(0.3 0.015 60);
+  --muted-foreground: oklch(0.7 0.015 75);
+  --accent: oklch(0.33 0.02 90);
+  --accent-foreground: oklch(0.93 0.01 80);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.7 0.075 130);
+  --brand: oklch(0.7 0.075 130);
+  --chart-1: oklch(0.7 0.075 130);
+  --chart-2: oklch(0.72 0.1 330);
+  --chart-3: oklch(0.78 0.095 78);
+  --chart-4: oklch(0.72 0.07 132);
+  --chart-5: oklch(0.7 0.015 75);
+
+  --graph-node: oklch(0.29 0.016 60);
+  --graph-node-border: oklch(0.52 0.02 70);
+  --graph-current: oklch(0.72 0.1 330);
+  --graph-visited: oklch(0.42 0.05 130 / 55%);
+  --graph-visited-border: oklch(0.72 0.07 132);
+  --graph-path: oklch(0.78 0.095 78);
+  --graph-path-fill: oklch(0.78 0.095 78);
+  --graph-edge: oklch(0.42 0.018 70);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply scroll-smooth font-sans;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 28%, transparent);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Signature texture — the canvas dot grid, reused as a page background so
+ * the whole product feels like one surface. Fades out radially.
+ * ------------------------------------------------------------------------- */
+@layer components {
+  .dot-grid {
+    background-image: radial-gradient(
+      color-mix(in oklch, var(--foreground) 13%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+    mask-image: radial-gradient(
+      ellipse 90% 70% at 50% 25%,
+      black 45%,
+      transparent 100%
+    );
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * React Flow — pin the canvas chrome to the design tokens
+ * ------------------------------------------------------------------------- */
+.react-flow {
+  --xy-background-color: var(--background);
+  --xy-edge-stroke: var(--graph-edge);
+  --xy-edge-stroke-selected: var(--brand);
+  --xy-attribution-background-color: transparent;
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--muted-foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(
+    in oklch,
+    var(--background) 55%,
+    transparent
+  );
+  --xy-minimap-node-background-color: var(--muted-foreground);
+  --xy-handle-background-color: var(--muted-foreground);
+  --xy-handle-border-color: var(--background);
+  --xy-selection-background-color: color-mix(
+    in oklch,
+    var(--brand) 8%,
+    transparent
+  );
+  --xy-selection-border: 1px solid
+    color-mix(in oklch, var(--brand) 60%, transparent);
+}
+
+.react-flow__controls {
+  @apply overflow-hidden rounded-xl border shadow-none;
+}
+
+.react-flow__attribution {
+  @apply text-muted-foreground/50;
+}
+
+/* ---------------------------------------------------------------------------
+ * Terminal — the console renders as a unix terminal: always dark, but tinted
+ * with the active palette's hues (brand for the surface, the canvas cursor
+ * color for the prompt). See console-panel.tsx.
+ * ------------------------------------------------------------------------- */
+:root {
+  --terminal-bg: oklch(from var(--brand) 0.21 calc(c * 0.3) h);
+  --terminal-fg: oklch(from var(--brand) 0.93 calc(c * 0.12) h);
+  --terminal-muted: oklch(from var(--brand) 0.68 calc(c * 0.18) h);
+  --terminal-prompt: oklch(from var(--graph-current) 0.8 c h);
+  --terminal-error: oklch(0.75 0.16 25);
+}
+
+.dark {
+  --terminal-bg: oklch(from var(--brand) 0.16 calc(c * 0.3) h);
+}
+
+/* ---------------------------------------------------------------------------
+ * Canvas node — the rim ring pulses while hovering an editable node, hinting
+ * you can drag from the rim to connect an edge (see components/editor/
+ * graph-node.tsx). Motion is a discoverability cue, so it's disabled under
+ * prefers-reduced-motion.
+ * ------------------------------------------------------------------------- */
+@keyframes node-connect-hint {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.group:hover .node-connect-ring {
+  animation: node-connect-hint 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node-connect-ring {
+    animation: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Monaco — the line the running algorithm is on, tinted to match the canvas
+ * cursor color (see lib/editor/use-monaco-line-highlight.ts)
+ * ------------------------------------------------------------------------- */
+.algo-line-highlight {
+  background: color-mix(in oklch, var(--graph-current) 16%, transparent);
+}
+
+.algo-line-highlight-gutter {
+  border-left: 3px solid var(--graph-current);
+}
+
+/* ---------------------------------------------------------------------------
+ * Markdown code blocks (posts) — highlight.js classes mapped to the SAME
+ * palette tokens the Monaco theme uses (lib/editor/monaco-theme.ts), so
+ * fenced code in a post matches the code editor in every palette and mode.
+ * ------------------------------------------------------------------------- */
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-meta {
+  color: var(--graph-current);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-attr {
+  color: var(--graph-path);
+}
+
+.hljs-number,
+.hljs-char.escape_,
+.hljs-symbol {
+  color: var(--graph-visited-border);
+}
+
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-section {
+  color: var(--brand);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-variable,
+.hljs-params {
+  color: var(--foreground);
+}
+
+.hljs-punctuation,
+.hljs-operator {
+  color: var(--muted-foreground);
+}
