@@ -49,13 +49,14 @@ export default function PixiViewCanvas({
   // the new values are applied) and bump a version.
   const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => {
+    // Watch ONLY the theme/palette signals on <html> (next-themes `class`, the
+    // palette's `data-palette`). NOT `style` — unrelated inline-style churn
+    // would spuriously rebuild the whole scene.
     const obs = new MutationObserver(() => setThemeVersion((v) => v + 1));
-    const opts: MutationObserverInit = {
+    obs.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class", "data-palette", "style"],
-    };
-    obs.observe(document.documentElement, opts);
-    obs.observe(document.body, opts);
+      attributeFilter: ["class", "data-palette"],
+    });
     return () => obs.disconnect();
   }, []);
 

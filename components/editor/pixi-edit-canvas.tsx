@@ -75,13 +75,15 @@ export default function PixiEditCanvas({
 
   const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => {
+    // Watch ONLY the theme/palette signals (next-themes sets `class`, the
+    // palette sets `data-palette` — both on <html>). NOT `style`: unrelated
+    // inline-style churn (Radix scroll-locks, resizable-panel drags, toasts)
+    // would otherwise tear down and rebuild the whole app mid-edit.
     const obs = new MutationObserver(() => setThemeVersion((v) => v + 1));
-    const opts: MutationObserverInit = {
+    obs.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class", "data-palette", "style"],
-    };
-    obs.observe(document.documentElement, opts);
-    obs.observe(document.body, opts);
+      attributeFilter: ["class", "data-palette"],
+    });
     return () => obs.disconnect();
   }, []);
 
