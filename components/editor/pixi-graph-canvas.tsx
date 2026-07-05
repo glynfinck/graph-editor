@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useTheme } from "next-themes";
+import { useEffect, useRef, useState } from "react";
 import { Application, Container, Graphics, Text } from "pixi.js";
 
 import { NODE_DIAMETER } from "@/components/editor/graph-node";
@@ -61,7 +60,22 @@ export default function PixiGraphCanvas() {
   const nodes = useEditorStore((s) => s.nodes);
   const edges = useEditorStore((s) => s.edges);
   const directed = useEditorStore((s) => s.directed);
-  const { resolvedTheme } = useTheme(); // re-render when light/dark flips
+  // Rebuild with fresh colors whenever the theme, palette, or any style on
+  // <html>/<body> changes. next-themes toggles a class and the palette sets
+  // data-palette — neither is reliably observable via React state (and their
+  // timing races this effect), so watch the DOM directly (the observer fires
+  // after the new values are applied) and bump a version.
+  const [themeVersion, setThemeVersion] = useState(0);
+  useEffect(() => {
+    const obs = new MutationObserver(() => setThemeVersion((v) => v + 1));
+    const opts: MutationObserverInit = {
+      attributes: true,
+      attributeFilter: ["class", "data-palette", "style"],
+    };
+    obs.observe(document.documentElement, opts);
+    obs.observe(document.body, opts);
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -230,7 +244,13 @@ export default function PixiGraphCanvas() {
         const rect = canvas.getBoundingClientRect();
         const mx = ev.clientX - rect.left;
         const my = ev.clientY - rect.top;
-        const factor = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+        // scale by how much was actually scrolled (normalized across
+        // line/page delta modes) and clamp so one event can't leap far — this
+        // keeps trackpads, which fire many small events, from rocketing
+        let dy = ev.deltaY;
+        if (ev.deltaMode === 1) dy *= 16;
+        else if (ev.deltaMode === 2) dy *= 100;
+        const factor = Math.min(1.2, Math.max(0.83, Math.exp(-dy * 0.0012)));
         const next = Math.max(0.02, Math.min(8, world.scale.x * factor));
         const wx = (mx - world.position.x) / world.scale.x;
         const wy = (my - world.position.y) / world.scale.y;
@@ -266,7 +286,7 @@ export default function PixiGraphCanvas() {
         // ignore teardown races
       }
     };
-  }, [nodes, edges, directed, resolvedTheme]);
+  }, [nodes, edges, directed, themeVersion]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden">
