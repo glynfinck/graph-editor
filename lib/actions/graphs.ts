@@ -4,12 +4,30 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { copyGraph, docToJson, replaceDoc } from "@/lib/graph/copy";
-import { graphDocSchema, EMPTY_GRAPH_DOC } from "@/lib/graph/types";
+import {
+  graphDocSchema,
+  EMPTY_GRAPH_DOC,
+  MAX_EDGES,
+  MAX_NODES,
+} from "@/lib/graph/types";
 import { createClient } from "@/lib/supabase/server";
 
 export type ActionResult =
   | { ok: true; id?: string }
   | { ok: false; error: string };
+
+/** A clear message when a doc exceeds the node/edge caps (vs the generic
+ *  "invalid document" a shape error would give). */
+function graphSizeError(data: unknown): string | null {
+  const doc = data as { nodes?: unknown[]; edges?: unknown[] } | null;
+  if (Array.isArray(doc?.nodes) && doc.nodes.length > MAX_NODES) {
+    return `Graphs are limited to ${MAX_NODES.toLocaleString()} nodes.`;
+  }
+  if (Array.isArray(doc?.edges) && doc.edges.length > MAX_EDGES) {
+    return `Graphs are limited to ${MAX_EDGES.toLocaleString()} edges.`;
+  }
+  return null;
+}
 
 const metaSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
@@ -44,6 +62,8 @@ export async function createGraph(input: {
 
   let doc = EMPTY_GRAPH_DOC;
   if (input.data !== undefined) {
+    const sizeError = graphSizeError(input.data);
+    if (sizeError) return { ok: false, error: sizeError };
     const parsedDoc = graphDocSchema.safeParse(input.data);
     if (!parsedDoc.success) {
       return { ok: false, error: "Invalid graph document." };
@@ -93,6 +113,8 @@ export async function saveGraph(
   const meta = metaSchema.safeParse(input);
   if (!meta.success) return { ok: false, error: meta.error.issues[0].message };
 
+  const sizeError = graphSizeError(input.data);
+  if (sizeError) return { ok: false, error: sizeError };
   const doc = graphDocSchema.safeParse(input.data);
   if (!doc.success) return { ok: false, error: "Invalid graph document." };
 

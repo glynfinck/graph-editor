@@ -15,6 +15,8 @@ import {
 
 import "@xyflow/react/dist/style.css";
 
+import { toast } from "sonner";
+
 import { EdgeInspector } from "@/components/editor/edge-inspector";
 import {
   FloatingConnectionLine,
@@ -25,6 +27,7 @@ import { NodeInspector } from "@/components/editor/node-inspector";
 import { PlaybackControls } from "@/components/editor/playback-controls";
 import { GraphDecorator } from "@/lib/editor/graph-decoration";
 import { useEditorStore } from "@/lib/editor/store";
+import { MAX_EDGES, MAX_NODES } from "@/lib/graph/types";
 
 const nodeTypes = { graphNode: GraphNode };
 const edgeTypes = { floating: FloatingEdge };
@@ -78,13 +81,23 @@ function Canvas({
   }, [editable, edges]);
 
   const onConnect = useCallback(
-    (connection: Connection) => connect(connection.source, connection.target),
-    [connect],
+    (connection: Connection) => {
+      if (edges.length >= MAX_EDGES) {
+        toast.error(`Graphs are limited to ${MAX_EDGES.toLocaleString()} edges.`);
+        return;
+      }
+      connect(connection.source, connection.target);
+    },
+    [connect, edges.length],
   );
 
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
       if (!editable || event.detail !== 2) return;
+      if (nodes.length >= MAX_NODES) {
+        toast.error(`Graphs are limited to ${MAX_NODES.toLocaleString()} nodes.`);
+        return;
+      }
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -93,7 +106,7 @@ function Canvas({
       // to center the new node on the click instead of dropping it to the SE
       addNodeAt(position.x - NODE_DIAMETER / 2, position.y - NODE_DIAMETER / 2);
     },
-    [editable, screenToFlowPosition, addNodeAt],
+    [editable, nodes.length, screenToFlowPosition, addNodeAt],
   );
 
   return (

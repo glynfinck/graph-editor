@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 /**
+ * Per-graph caps. A graph can't be created, saved, or edited beyond these — the
+ * ~1MB server-action body limit is the real ceiling behind them, and the API
+ * read limit (supabase config max_rows) is set well above them.
+ */
+export const MAX_NODES = 5000;
+export const MAX_EDGES = 15000;
+
+/**
  * The canvas document, assembled from the graph_nodes/graph_edges tables on
  * read and swapped atomically on save (replace_graph_doc). Node/edge ids are
  * uuids (36 chars). Per-edge `weight`/`name` are the generalized attributes —
@@ -17,9 +25,7 @@ export const graphDocSchema = z.object({
         y: z.number().finite(),
       }),
     )
-    // generous caps for large graphs; the server-action body limit (~1MB) is
-    // the real ceiling on a save
-    .max(5000),
+    .max(MAX_NODES, `A graph can have at most ${MAX_NODES} nodes`),
   edges: z
     .array(
       z.object({
@@ -42,7 +48,7 @@ export const graphDocSchema = z.object({
           .transform((v) => (v ? v : null)),
       }),
     )
-    .max(15000),
+    .max(MAX_EDGES, `A graph can have at most ${MAX_EDGES} edges`),
 });
 
 export type GraphDoc = z.infer<typeof graphDocSchema>;

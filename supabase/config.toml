@@ -7,7 +7,10 @@ enabled = true
 port = 54331
 schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
-max_rows = 1000
+# graphs embed all their nodes/edges in one request; a big graph (the doc
+# schema allows up to 5k nodes / 15k edges) would be silently truncated at the
+# old 1000-row cap, so raise it well past the largest graph.
+max_rows = 20000
 
 [db]
 port = 54332
