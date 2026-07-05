@@ -14,12 +14,16 @@ const AW = 7; // arrowhead half-width
 const LABEL_CAP = 800;
 const LABEL_MIN_ZOOM = 0.55; // hide labels when zoomed out past this
 
-/** Resolve a CSS custom property (even oklch) to a packed 0xRRGGBB number. */
-function cssColor(varName: string, fallback: number): number {
+/**
+ * Resolve a CSS custom property (even oklch) to a packed 0xRRGGBB number,
+ * reading it from inside `scope` so palette variables scoped to an ancestor
+ * (e.g. [data-palette]) resolve correctly.
+ */
+function cssColor(scope: HTMLElement, varName: string, fallback: number): number {
   const probe = document.createElement("span");
   probe.style.color = `var(${varName})`;
   probe.style.display = "none";
-  document.body.appendChild(probe);
+  scope.appendChild(probe);
   const rgb = getComputedStyle(probe).color; // browser resolves to rgb()/rgba()
   probe.remove();
   const m = rgb.match(/\d+(?:\.\d+)?/g);
@@ -56,7 +60,7 @@ export default function PixiGraphCanvas() {
         antialias: true,
         autoDensity: true,
         resolution: window.devicePixelRatio || 1,
-        background: cssColor("--background", 0xffffff),
+        background: cssColor(el, "--background", 0xffffff),
       });
       if (destroyed) {
         application.destroy(true);
@@ -65,10 +69,13 @@ export default function PixiGraphCanvas() {
       app = application;
       el.appendChild(app.canvas);
 
-      const cNode = cssColor("--graph-node", 0xe6eaf4);
-      const cBorder = cssColor("--graph-node-border", 0xaeb9d2);
-      const cEdge = cssColor("--graph-edge", 0x9aa4b6);
-      const cText = cssColor("--foreground", 0x1a1f2b);
+      // the palette's graph colors are intentionally pale (they lean on the
+      // canvas dot-grid for contrast, which this phase doesn't draw), so read
+      // the stronger muted-foreground for edges/borders to stay legible
+      const cNode = cssColor(el, "--graph-node", 0xe6eaf4);
+      const cBorder = cssColor(el, "--muted-foreground", 0x6b7280);
+      const cEdge = cssColor(el, "--muted-foreground", 0x6b7280);
+      const cText = cssColor(el, "--foreground", 0x1a1f2b);
 
       const world = new Container();
       app.stage.addChild(world);
@@ -105,14 +112,19 @@ export default function PixiGraphCanvas() {
           ]);
         }
       }
-      edgesG.stroke({ width: 1.5, color: cEdge });
+      edgesG.stroke({ width: 1.75, color: cEdge });
       arrowsG.fill(cEdge);
       world.addChild(edgesG, arrowsG);
 
-      // nodes (batched)
+      // nodes — fill + stroke PER circle so the border actually renders (a
+      // single batched stroke after a batched fill doesn't in Pixi v8)
       const nodesG = new Graphics();
-      for (const n of nodes) nodesG.circle(n.position.x, n.position.y, R);
-      nodesG.fill(cNode).stroke({ width: 2, color: cBorder });
+      for (const n of nodes) {
+        nodesG
+          .circle(n.position.x, n.position.y, R)
+          .fill(cNode)
+          .stroke({ width: 2.5, color: cBorder });
+      }
       world.addChild(nodesG);
 
       // labels (skipped past the cap; hidden when zoomed out)
