@@ -135,6 +135,8 @@ export default function PixiEditCanvas({
       world.addChild(scene.nodesLayer, scene.nodeLabelsLayer);
       const selLayer = new Graphics();
       world.addChild(selLayer); // selection rings sit on top of everything
+      const connectLayer = new Graphics();
+      world.addChild(connectLayer); // the in-progress connection line, topmost
 
       const canvas = app.canvas;
       const screenToWorld = (clientX: number, clientY: number) => {
@@ -202,6 +204,8 @@ export default function PixiEditCanvas({
         canvas,
         world,
         scene,
+        connectLayer,
+        connectColor: pal.ring,
         screenToWorld,
         redraw,
         refreshSelection: drawSelection,
@@ -279,8 +283,8 @@ export default function PixiEditCanvas({
         </div>
       ) : null}
       <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-background/85 px-3 py-1 text-xs text-muted-foreground ring-1 ring-border">
-        Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges · drag to move
-        · click to select · ⌫ deletes
+        Pixi (WebGL) · {nodes.length} nodes / {edges.length} edges · double-click
+        to add · drag from a rim to connect · ⌫ deletes
       </div>
     </div>
   );
