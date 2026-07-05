@@ -72,6 +72,11 @@ export default function PixiGraphCanvas() {
   const nodes = useEditorStore((s) => s.nodes);
   const edges = useEditorStore((s) => s.edges);
   const directed = useEditorStore((s) => s.directed);
+  // preserve zoom/pan across same-graph rebuilds (theme changes); only refit
+  // when the graph itself changes
+  const viewRef = useRef<{ scale: number; x: number; y: number } | null>(null);
+  const lastNodesRef = useRef<typeof nodes | null>(null);
+
   // Rebuild with fresh colors whenever the theme, palette, or any style on
   // <html>/<body> changes. next-themes toggles a class and the palette sets
   // data-palette — neither is reliably observable via React state (and their
@@ -92,6 +97,10 @@ export default function PixiGraphCanvas() {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+
+    // same nodes reference = a theme/style rebuild, not a new graph
+    const graphChanged = lastNodesRef.current !== nodes;
+    lastNodesRef.current = nodes;
 
     let destroyed = false;
     let app: Application | null = null;
@@ -121,10 +130,15 @@ export default function PixiGraphCanvas() {
       const cBorder = cssColor(el, "--graph-node-border", 0xaeb9d2);
       const cEdge = cssColor(el, "--graph-edge", 0xc9d0dd);
       const cText = cssColor(el, "--foreground", 0x1a1f2b);
-      // grid dots: a fixed small step from the background toward the foreground
-      // so they read equally subtle in light and dark (--border has different
-      // contrast-vs-background in each mode, which looked bright/faint)
-      const cGrid = mix(cBg, cText, 0.18);
+      // grid dots: blend from the background toward the foreground. A dark dot
+      // on a light background needs a bigger step to read as strongly as a
+      // light dot on a dark background, so scale the blend by bg luminance.
+      const bgLum =
+        (0.299 * ((cBg >> 16) & 255) +
+          0.587 * ((cBg >> 8) & 255) +
+          0.114 * (cBg & 255)) /
+        255;
+      const cGrid = mix(cBg, cText, bgLum > 0.5 ? 0.4 : 0.34);
 
       // dot-grid background in screen space (behind the graph), redrawn as the
       // view pans/zooms — cheap because it only covers the viewport
@@ -217,21 +231,33 @@ export default function PixiGraphCanvas() {
         gridG.clear();
         const scale = world.scale.x;
         const spacing = GAP * scale;
-        if (spacing < 10) return;
+        // fade the grid in as the dots spread apart (smoothstep over 9→24px)
+        // instead of snapping on at a hard threshold
+        const t = Math.max(0, Math.min(1, (spacing - 9) / 15));
+        const alpha = t * t * (3 - 2 * t); // smoothstep, up to full opacity
+        if (alpha < 0.03) return; // effectively invisible → skip the work
         const w = app.screen.width;
         const h = app.screen.height;
         const ox = ((world.position.x % spacing) + spacing) % spacing;
         const oy = ((world.position.y % spacing) + spacing) % spacing;
-        const r = Math.max(0.7, Math.min(1.6, 0.7 * scale));
+        const r = Math.max(1, Math.min(2, 0.9 * scale));
         for (let x = ox; x <= w; x += spacing) {
           for (let y = oy; y <= h; y += spacing) gridG.circle(x, y, r);
         }
-        gridG.fill({ color: cGrid, alpha: 0.9 });
+        gridG.fill({ color: cGrid, alpha });
       };
 
+      const saveView = () => {
+        viewRef.current = {
+          scale: world.scale.x,
+          x: world.position.x,
+          y: world.position.y,
+        };
+      };
       const redraw = () => {
         drawGrid();
         updateLOD();
+        saveView();
       };
 
       const fit = () => {
@@ -280,7 +306,7 @@ export default function PixiGraphCanvas() {
         world.position.y += ev.clientY - lastY;
         lastX = ev.clientX;
         lastY = ev.clientY;
-        drawGrid();
+        redraw();
       };
       const onUp = () => {
         dragging = false;
@@ -311,9 +337,20 @@ export default function PixiGraphCanvas() {
       window.addEventListener("pointerup", onUp);
       canvas.addEventListener("wheel", onWheel, { passive: false });
 
-      fit();
-      // refit once the panel has settled its size
-      const settle = window.setTimeout(fit, 80);
+      // restore the prior view on a same-graph rebuild (e.g. a theme change);
+      // only fit when the graph itself changed
+      const applyView = () => {
+        if (!graphChanged && viewRef.current) {
+          world.scale.set(viewRef.current.scale);
+          world.position.set(viewRef.current.x, viewRef.current.y);
+          redraw();
+        } else {
+          fit();
+        }
+      };
+      applyView();
+      // re-apply once the panel has settled its size
+      const settle = window.setTimeout(applyView, 80);
 
       teardown = () => {
         window.clearTimeout(settle);
