@@ -125,8 +125,11 @@ export default function PixiEditCanvas({
       app.stage.addChild(world);
 
       const scene = createObjectScene({ palette: pal, directed });
-      // z-order: edges → edge labels → [overlay] → node circles → node labels
-      world.addChild(scene.edgesLayer, scene.edgeLabelsLayer);
+      // z-order: edges → edge selection → edge labels → [overlay] → node
+      // circles → node labels → node selection → hover/connect. The selected
+      // edge highlight sits UNDER its label so the weight stays readable.
+      const edgeSelLayer = new Graphics();
+      world.addChild(scene.edgesLayer, edgeSelLayer, scene.edgeLabelsLayer);
       const overlay = createPlaybackOverlay({
         world,
         ticker: app.ticker,
@@ -159,10 +162,21 @@ export default function PixiEditCanvas({
         };
       };
 
-      // selection channel above the graph: a ring on the selected node / a
-      // thicker recolor on the selected edge (reads live selection from store)
+      // Pixi's resizeTo only watches the window; a resizable panel changes the
+      // element size without a window resize, so observe the element directly
+      // and resize the renderer to match (keeping the current view).
+      const resizeObs = new ResizeObserver(() => {
+        if (!app) return;
+        app.resize();
+        redraw();
+      });
+      resizeObs.observe(el);
+
+      // selection channel: a ring on the selected node (top) and a thicker
+      // recolor on the selected edge (under its label). Reads live from store.
       const drawSelection = () => {
         selLayer.clear();
+        edgeSelLayer.clear();
         const st = useEditorStore.getState();
         const selNode = st.nodes.find((n) => n.selected);
         if (selNode) {
@@ -176,7 +190,7 @@ export default function PixiEditCanvas({
           const t = scene.nodePos(selEdge.target);
           if (s && t) {
             const e = trimmedEnds(s, t, directed);
-            selLayer
+            edgeSelLayer
               .moveTo(e.x1, e.y1)
               .lineTo(e.x2, e.y2)
               .stroke({ width: 3.5, color: pal.ring });
@@ -234,6 +248,7 @@ export default function PixiEditCanvas({
 
       teardown = () => {
         window.clearTimeout(settle);
+        resizeObs.disconnect();
         sceneRef.current = null;
         detachInput();
         overlay.destroy();
@@ -267,6 +282,17 @@ export default function PixiEditCanvas({
   useEffect(() => {
     sceneRef.current?.drawSelection();
   }, [selectedNodeId, selectedEdgeId]);
+
+  // label edits (node name, edge weight/name) don't change structureSig, so
+  // reconcile won't fire — patch the affected labels here. The scene setters
+  // are cheap no-ops when a value is unchanged, so calling them for everything
+  // each render (incl. drags) is fine at editable scale.
+  useEffect(() => {
+    const s = sceneRef.current?.scene;
+    if (!s) return;
+    for (const n of nodes) s.setNodeLabel(n.id, n.data.name);
+    for (const e of edges) s.setEdgeLabel(e.id, e.data?.weight, e.data?.name);
+  }, [nodes, edges]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden">

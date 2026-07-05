@@ -161,7 +161,7 @@ export function createObjectScene(opts: {
 
   function setNodeLabel(id: string, name: string) {
     const o = nodesById.get(id);
-    if (!o) return;
+    if (!o || o.name === name) return; // cheap no-op so a label pass can call it freely
     o.name = name;
     o.label.text = name;
     placeNode(o, o.circle.position.x, o.circle.position.y);

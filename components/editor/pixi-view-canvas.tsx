@@ -191,6 +191,15 @@ export default function PixiViewCanvas({
         };
       };
 
+      // Pixi's resizeTo only watches the window; observe the element too so a
+      // resizable panel drag resizes the renderer (keeping the current view).
+      const resizeObs = new ResizeObserver(() => {
+        if (!app) return;
+        app.resize();
+        redraw();
+      });
+      resizeObs.observe(el);
+
       const fit = () => {
         if (!app || nodes.length === 0) return;
         let minX = Infinity;
@@ -279,6 +288,7 @@ export default function PixiViewCanvas({
 
       teardown = () => {
         window.clearTimeout(settle);
+        resizeObs.disconnect();
         sceneRef.current = null;
         overlay.destroy();
         canvas.removeEventListener("pointerdown", onDown);

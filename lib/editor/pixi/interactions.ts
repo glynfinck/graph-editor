@@ -21,6 +21,8 @@ const RIM_R = 36;
 const SNAP_R = 36; // connect-target snap radius (React Flow's connectionRadius)
 const DRAG_PX = 4; // screen threshold separating a click from a drag
 const EDGE_HIT_PX = 7; // screen pick tolerance for selecting an edge
+const CONNECT_DASH = 6; // dashed in-progress connection line (world units)
+const CONNECT_GAP = 4;
 
 type Pending =
   | { kind: "pan"; sx: number; sy: number }
@@ -122,7 +124,15 @@ export function attachInteractions(opts: {
     if (snap) {
       connectLayer.circle(end.x, end.y, R + 3).stroke({ width: 2.5, color: connectColor });
     }
-    connectLayer.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: 2, color: connectColor });
+    // dashed line, like React Flow's in-progress connection
+    const segLen = Math.hypot(x2 - x1, y2 - y1) || 1;
+    const period = CONNECT_DASH + CONNECT_GAP;
+    for (let p = 0; p < segLen; p += period) {
+      const a = p;
+      const b = Math.min(segLen, p + CONNECT_DASH);
+      connectLayer.moveTo(x1 + ux * a, y1 + uy * a).lineTo(x1 + ux * b, y1 + uy * b);
+    }
+    connectLayer.stroke({ width: 2, color: connectColor });
   };
 
   const onDown = (ev: PointerEvent) => {
