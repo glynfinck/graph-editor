@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useRef, useTransition } from "react";
@@ -15,6 +16,7 @@ import {
   Play,
   Plus,
   Save,
+  Sparkles,
   Square,
   SquareTerminal,
   Waypoints,
@@ -25,6 +27,13 @@ import { toast } from "sonner";
 import { ConsolePanel } from "@/components/editor/console-panel";
 import { DirectedToggle } from "@/components/editor/directed-toggle";
 import { GraphCanvas } from "@/components/editor/graph-canvas";
+
+// EXPERIMENT: WebGL renderer, client-only (needs the DOM/WebGL), lazy-loaded so
+// pixi.js stays out of the bundle until you flip to it.
+const PixiGraphCanvas = dynamic(
+  () => import("@/components/editor/pixi-graph-canvas"),
+  { ssr: false },
+);
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,9 +51,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FileTree } from "@/components/projects/file-tree";
-import { createGraph, duplicateGraph, saveGraph } from "@/lib/actions/graphs";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  createGraph,
+  duplicateGraph,
+  loadGraphDoc,
+  saveGraph,
+} from "@/lib/actions/graphs";
 import { saveProject } from "@/lib/actions/projects";
-import type { Graph } from "@/lib/data/graphs";
+import type { GraphSummary } from "@/lib/data/graphs";
 import {
   applyMonacoAppTheme,
   useMonacoAppTheme,
@@ -89,7 +104,7 @@ export function ProjectWorkspace({
     active_graph_id: string | null;
   };
   initialFiles: { path: string; content: string }[];
-  graphs: Graph[];
+  graphs: GraphSummary[];
   pinnedGraphIds: string[];
   forkedFrom: { id: string; title: string } | null;
   userId: string | null;
@@ -98,6 +113,7 @@ export function ProjectWorkspace({
   const [saving, startSaving] = useTransition();
   const [copying, startCopying] = useTransition();
   const [creatingGraph, startCreatingGraph] = useTransition();
+  const [pixi, setPixi] = useState(false); // EXPERIMENT: React Flow ↔ Pixi
 
   const initProject = useProjectStore((s) => s.init);
   const name = useProjectStore((s) => s.name);
@@ -126,6 +142,12 @@ export function ProjectWorkspace({
   const editorRef = useRef<MonacoEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const [modelVersion, setModelVersion] = useState(0);
+
+  // the editor holds the id of whichever graph's document is currently live.
+  // The active graph's doc is fetched on demand (the picker only carries
+  // summaries), so "still loading" is simply: a graph is selected but its
+  // document isn't the one in the editor yet.
+  const editorGraphId = useEditorStore((s) => s.graphId);
 
   useMonacoAppTheme(monacoRef);
 
@@ -156,7 +178,7 @@ export function ProjectWorkspace({
     () =>
       graphIds
         .map((id) => graphs.find((graph) => graph.id === id))
-        .filter((graph): graph is Graph => !!graph),
+        .filter((graph): graph is GraphSummary => !!graph),
     [graphIds, graphs],
   );
   const unpinnedMine = useMemo(
@@ -171,6 +193,8 @@ export function ProjectWorkspace({
   );
   const canEditGraph =
     !!activeGraph && !!userId && activeGraph.owner_id === userId;
+  // a graph is selected but its document hasn't been paged in yet
+  const graphLoading = !!activeGraphId && editorGraphId !== activeGraphId;
 
   function copyActiveGraph() {
     if (!activeGraph || copying) return;
@@ -200,26 +224,59 @@ export function ProjectWorkspace({
     });
   }
 
-  // load the selected test graph onto the canvas
+  // load the selected test graph onto the canvas, fetching its document on
+  // demand (the picker only knows counts, not the node/edge payload)
   useEffect(() => {
     // a run still streaming frames for the previous graph must not bleed
     // into the newly selected one
     if (useEditorStore.getState().status === "running") stop();
-    if (activeGraph) {
-      initEditor(
-        activeGraph.id,
-        activeGraph.name,
-        activeGraph.description,
-        activeGraph.directed,
-        activeGraph.doc,
-      );
-    } else {
+
+    if (!activeGraphId) {
       initEditor("", "", "", false, { nodes: [], edges: [] });
+      return;
     }
-  }, [activeGraph, initEditor, stop]);
+
+    // already the live document — a router.refresh() (fresh `graphs` array) or
+    // a metadata edit must not refetch and discard unsaved canvas edits
+    if (useEditorStore.getState().graphId === activeGraphId) return;
+
+    // a freshly created/copied graph isn't in `graphs` until the refresh
+    // lands; the skeleton (derived from the editor's loaded id) stays up until
+    // its summary arrives and we can load it
+    const summary = graphs.find((graph) => graph.id === activeGraphId);
+    if (!summary) return;
+
+    let cancelled = false;
+    loadGraphDoc(activeGraphId).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        initEditor(
+          summary.id,
+          summary.name,
+          summary.description,
+          summary.directed,
+          result.doc,
+        );
+      } else {
+        toast.error(result.error);
+        // clear the skeleton with an empty canvas; reselecting retries
+        initEditor(summary.id, summary.name, summary.description, summary.directed, {
+          nodes: [],
+          edges: [],
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGraphId, graphs, initEditor, stop]);
 
   const canRun =
-    status === "ready" && !!openPath && openPath.endsWith(".py") && !!activeGraph;
+    status === "ready" &&
+    !!openPath &&
+    openPath.endsWith(".py") &&
+    !!activeGraph &&
+    !graphLoading;
 
   function runFile(path: string) {
     const state = useProjectStore.getState();
@@ -414,6 +471,19 @@ export function ProjectWorkspace({
               <PinOff />
             </Button>
           )}
+          {activeGraph && (
+            // EXPERIMENT: flip the renderer to compare performance (view-only)
+            <Button
+              size="sm"
+              variant={pixi ? "secondary" : "ghost"}
+              aria-pressed={pixi}
+              title="Toggle the experimental WebGL (Pixi) renderer"
+              onClick={() => setPixi((v) => !v)}
+            >
+              <Sparkles />
+              {pixi ? "Pixi" : "React Flow"}
+            </Button>
+          )}
 
           <div className="flex items-center">
             <Button
@@ -554,10 +624,19 @@ export function ProjectWorkspace({
         >
           <ResizablePanelGroup orientation="vertical">
             <ResizablePanel defaultSize="62%" minSize="20%">
-              {activeGraph ? (
-                // canvas edits are runnable immediately; Save persists them
-                // when the graph is the caller's own
-                <GraphCanvas editable={canEditGraph} />
+              {graphLoading ? (
+                <div className="h-full w-full p-3">
+                  <Skeleton className="h-full w-full rounded-lg" />
+                </div>
+              ) : activeGraph ? (
+                pixi ? (
+                  // EXPERIMENT: WebGL renderer with live playback, view-only
+                  <PixiGraphCanvas showPlayback />
+                ) : (
+                  // canvas edits are runnable immediately; Save persists them
+                  // when the graph is the caller's own
+                  <GraphCanvas editable={canEditGraph} />
+                )
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Waypoints className="size-6" />
