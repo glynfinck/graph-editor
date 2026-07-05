@@ -49,6 +49,17 @@ function cssColor(scope: HTMLElement, varName: string, fallback: number): number
   return toHex(resolveColor(scope, varName), fallback);
 }
 
+/** Linear blend of two packed 0xRRGGBB colors (t=0 → a, t=1 → b). */
+function mix(a: number, b: number, t: number): number {
+  const ar = (a >> 16) & 255;
+  const ag = (a >> 8) & 255;
+  const ab = a & 255;
+  const r = Math.round(ar + (((b >> 16) & 255) - ar) * t);
+  const g = Math.round(ag + (((b >> 8) & 255) - ag) * t);
+  const bl = Math.round(ab + ((b & 255) - ab) * t);
+  return (r << 16) | (g << 8) | bl;
+}
+
 /**
  * EXPERIMENT — a Pixi (WebGL) renderer for the graph, read-only for now: nodes,
  * edges, arrowheads, pan/zoom, fit-to-view, and label LOD. Reads the same
@@ -88,12 +99,13 @@ export default function PixiGraphCanvas() {
 
     (async () => {
       const application = new Application();
+      const cBg = cssColor(el, "--background", 0xffffff);
       await application.init({
         resizeTo: el,
         antialias: true,
         autoDensity: true,
         resolution: window.devicePixelRatio || 1,
-        background: cssColor(el, "--background", 0xffffff),
+        background: cBg,
       });
       if (destroyed) {
         application.destroy(true);
@@ -108,8 +120,11 @@ export default function PixiGraphCanvas() {
       const cNode = cssColor(el, "--graph-node", 0xffffff);
       const cBorder = cssColor(el, "--graph-node-border", 0xaeb9d2);
       const cEdge = cssColor(el, "--graph-edge", 0xc9d0dd);
-      const cGrid = cssColor(el, "--border", 0xe2e6ee);
       const cText = cssColor(el, "--foreground", 0x1a1f2b);
+      // grid dots: a fixed small step from the background toward the foreground
+      // so they read equally subtle in light and dark (--border has different
+      // contrast-vs-background in each mode, which looked bright/faint)
+      const cGrid = mix(cBg, cText, 0.18);
 
       // dot-grid background in screen space (behind the graph), redrawn as the
       // view pans/zooms — cheap because it only covers the viewport
