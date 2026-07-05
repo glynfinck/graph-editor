@@ -9,6 +9,7 @@ import { useEditorStore } from "@/lib/editor/store";
 const R = NODE_DIAMETER / 2; // 28
 const AH = 11; // arrowhead length
 const AW = 7; // arrowhead half-width
+const GAP = 24; // dot-grid spacing (world units) — matches the React Flow canvas
 // creating a Text texture per node is the expensive part; above this we skip
 // labels (a level-of-detail cap) so the geometry still renders fast at scale
 const LABEL_CAP = 800;
@@ -101,13 +102,19 @@ export default function PixiGraphCanvas() {
       app = application;
       el.appendChild(app.canvas);
 
-      // the palette's graph colors are intentionally pale (they lean on the
-      // canvas dot-grid for contrast, which this phase doesn't draw), so read
-      // the stronger muted-foreground for edges/borders to stay legible
-      const cNode = cssColor(el, "--graph-node", 0xe6eaf4);
-      const cBorder = cssColor(el, "--muted-foreground", 0x6b7280);
-      const cEdge = cssColor(el, "--muted-foreground", 0x6b7280);
+      // the real graph palette — node fill is near-white and borders/edges are
+      // pale; the dot grid gives them the contrast they rely on, matching the
+      // React Flow canvas
+      const cNode = cssColor(el, "--graph-node", 0xffffff);
+      const cBorder = cssColor(el, "--graph-node-border", 0xaeb9d2);
+      const cEdge = cssColor(el, "--graph-edge", 0xc9d0dd);
+      const cGrid = cssColor(el, "--border", 0xe2e6ee);
       const cText = cssColor(el, "--foreground", 0x1a1f2b);
+
+      // dot-grid background in screen space (behind the graph), redrawn as the
+      // view pans/zooms — cheap because it only covers the viewport
+      const gridG = new Graphics();
+      app.stage.addChild(gridG);
 
       const world = new Container();
       app.stage.addChild(world);
@@ -144,7 +151,7 @@ export default function PixiGraphCanvas() {
           ]);
         }
       }
-      edgesG.stroke({ width: 1.75, color: cEdge });
+      edgesG.stroke({ width: 1.5, color: cEdge });
       arrowsG.fill(cEdge);
       world.addChild(edgesG, arrowsG);
 
@@ -155,7 +162,7 @@ export default function PixiGraphCanvas() {
         nodesG
           .circle(n.position.x, n.position.y, R)
           .fill(cNode)
-          .stroke({ width: 2.5, color: cBorder });
+          .stroke({ width: 2, color: cBorder });
       }
       world.addChild(nodesG);
 
@@ -188,6 +195,30 @@ export default function PixiGraphCanvas() {
         if (labels) labels.visible = world.scale.x > LABEL_MIN_ZOOM;
       };
 
+      // screen-space dots at GAP*scale spacing, phased by the pan offset, so the
+      // grid scrolls/zooms with the graph. Skipped when too dense to read.
+      const drawGrid = () => {
+        if (!app) return;
+        gridG.clear();
+        const scale = world.scale.x;
+        const spacing = GAP * scale;
+        if (spacing < 10) return;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const ox = ((world.position.x % spacing) + spacing) % spacing;
+        const oy = ((world.position.y % spacing) + spacing) % spacing;
+        const r = Math.max(0.7, Math.min(1.6, 0.7 * scale));
+        for (let x = ox; x <= w; x += spacing) {
+          for (let y = oy; y <= h; y += spacing) gridG.circle(x, y, r);
+        }
+        gridG.fill({ color: cGrid, alpha: 0.9 });
+      };
+
+      const redraw = () => {
+        drawGrid();
+        updateLOD();
+      };
+
       const fit = () => {
         if (!app || nodes.length === 0) return;
         let minX = Infinity;
@@ -214,7 +245,7 @@ export default function PixiGraphCanvas() {
           w / 2 - ((minX + maxX) / 2) * scale,
           h / 2 - ((minY + maxY) / 2) * scale,
         );
-        updateLOD();
+        redraw();
       };
 
       // pan + zoom via DOM events on the canvas
@@ -234,6 +265,7 @@ export default function PixiGraphCanvas() {
         world.position.y += ev.clientY - lastY;
         lastX = ev.clientX;
         lastY = ev.clientY;
+        drawGrid();
       };
       const onUp = () => {
         dragging = false;
@@ -256,7 +288,7 @@ export default function PixiGraphCanvas() {
         const wy = (my - world.position.y) / world.scale.y;
         world.scale.set(next);
         world.position.set(mx - wx * next, my - wy * next);
-        updateLOD();
+        redraw();
       };
       canvas.style.cursor = "grab";
       canvas.addEventListener("pointerdown", onDown);
