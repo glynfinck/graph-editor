@@ -3,12 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { getGraphDoc } from "@/lib/data/graphs";
 import { copyGraph, docToJson, replaceDoc } from "@/lib/graph/copy";
 import {
   graphDocSchema,
   EMPTY_GRAPH_DOC,
   MAX_EDGES,
   MAX_NODES,
+  type GraphDoc,
 } from "@/lib/graph/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -226,6 +228,27 @@ export async function toggleGraphLike(
   revalidatePath("/graphs");
   revalidatePath(`/graphs/${id}`);
   return { ok: true, id, liked: !existing };
+}
+
+/**
+ * Load a visible graph's full document, paged in. Used by the project
+ * workspace, which lists graph summaries (counts only) and fetches the active
+ * graph's nodes/edges on demand. RLS governs visibility — no user required.
+ */
+export async function loadGraphDoc(
+  id: string,
+): Promise<{ ok: true; doc: GraphDoc } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  try {
+    const doc = await getGraphDoc(supabase, id);
+    return { ok: true, doc };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Couldn't load the graph.",
+    };
+  }
 }
 
 /** Copy any visible graph (e.g. a sample) into the caller's own collection. */

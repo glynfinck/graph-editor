@@ -7,10 +7,11 @@ enabled = true
 port = 54331
 schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
-# graphs embed all their nodes/edges in one request; a big graph (the doc
-# schema allows up to 5k nodes / 15k edges) would be silently truncated at the
-# old 1000-row cap, so raise it well past the largest graph.
-max_rows = 20000
+# Every large read is paged in bounded chunks (lib/data/graphs.ts fetchAllRows
+# uses .range() in PAGE-sized windows and concatenates), so nothing relies on a
+# single request returning a whole big graph. Keep the cap at the page size —
+# it doubles as a guard against unbounded pulls.
+max_rows = 1000
 
 [db]
 port = 54332

@@ -1,7 +1,7 @@
 import {
-  GRAPH_SELECT,
-  toGraph,
-  type GraphJoinRow,
+  SUMMARY_SELECT,
+  toGraphSummary,
+  type SummaryRow,
 } from "@/lib/data/graphs";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/helpers";
@@ -69,7 +69,7 @@ export async function getProjectWorkspace(id: string) {
       .order("path"),
     supabase
       .from("graphs")
-      .select(GRAPH_SELECT)
+      .select(SUMMARY_SELECT)
       .order("is_sample", { ascending: false })
       .order("updated_at", { ascending: false }),
     supabase
@@ -98,8 +98,8 @@ export async function getProjectWorkspace(id: string) {
     user,
     project: projectRes.data ?? null,
     files: filesRes.data ?? [],
-    graphs: ((graphsRes.data as GraphJoinRow[] | null) ?? []).map((row) =>
-      toGraph(row, user.id),
+    graphs: ((graphsRes.data as SummaryRow[] | null) ?? []).map((row) =>
+      toGraphSummary(row, user.id),
     ),
     pinnedGraphIds: (pinsRes.data ?? []).map((pin) => pin.graph_id),
     forkedFrom,

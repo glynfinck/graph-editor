@@ -5,8 +5,6 @@ import type { Tables } from "@/types/helpers";
 export type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 type GraphRow = Tables<"graphs">;
-type NodeRow = Tables<"graph_nodes">;
-type EdgeRow = Tables<"graph_edges">;
 
 /** A graph row with its full canvas document (nodes + edges paged in). */
 export type Graph = GraphRow & {
@@ -22,38 +20,6 @@ export type GraphSummary = GraphRow & {
   likeCount: number;
   likedByMe: boolean;
 };
-
-// full node/edge embed — still used by the project workspace loader
-// (lib/data/projects.ts) until it moves to on-demand doc loading.
-export const GRAPH_SELECT =
-  "*, graph_nodes(*), graph_edges(*), graph_likes(user_id)";
-
-export type GraphJoinRow = GraphRow & {
-  graph_nodes: NodeRow[];
-  graph_edges: EdgeRow[];
-  graph_likes: { user_id: string }[];
-};
-
-export function toGraph(
-  { graph_nodes, graph_edges, graph_likes, ...row }: GraphJoinRow,
-  userId: string | null = null,
-): Graph {
-  return {
-    ...row,
-    doc: {
-      nodes: graph_nodes.map((n) => ({ id: n.id, name: n.name, x: n.x, y: n.y })),
-      edges: graph_edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        weight: e.weight,
-        name: e.name,
-      })),
-    },
-    likeCount: graph_likes.length,
-    likedByMe: !!userId && graph_likes.some((like) => like.user_id === userId),
-  };
-}
 
 // Requests are row-capped (supabase max_rows), so a big graph's nodes/edges are
 // fetched in bounded pages and concatenated rather than one giant embed.
@@ -102,16 +68,16 @@ export async function getGraphDoc(
   return { nodes, edges };
 }
 
-const SUMMARY_SELECT =
+export const SUMMARY_SELECT =
   "*, graph_nodes(count), graph_edges(count), graph_likes(user_id)";
 
-type SummaryRow = GraphRow & {
+export type SummaryRow = GraphRow & {
   graph_nodes: { count: number }[];
   graph_edges: { count: number }[];
   graph_likes: { user_id: string }[];
 };
 
-function toSummary(
+export function toGraphSummary(
   { graph_nodes, graph_edges, graph_likes, ...row }: SummaryRow,
   userId: string | null,
 ): GraphSummary {
@@ -144,7 +110,7 @@ export async function getVisibleGraphs() {
 
   const user = userData.user;
   const graphs = ((data as SummaryRow[] | null) ?? []).map((row) =>
-    toSummary(row, user?.id ?? null),
+    toGraphSummary(row, user?.id ?? null),
   );
   return {
     user,
@@ -172,7 +138,7 @@ export async function getPublicGraphs() {
 
   const user = userData.user;
   const graphs = ((data as SummaryRow[] | null) ?? []).map((row) =>
-    toSummary(row, user?.id ?? null),
+    toGraphSummary(row, user?.id ?? null),
   );
   return {
     user,
