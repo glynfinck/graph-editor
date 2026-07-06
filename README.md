@@ -22,7 +22,7 @@ new.
   borders. Figtree + JetBrains Mono
 - **Supabase**: Postgres + Auth (GitHub, Google, email) + RLS, via
   `@supabase/ssr`
-- **@xyflow/react (React Flow 12)** for the canvas, **Monaco** for the code
+- **Pixi.js (WebGL)** for the canvas, **Monaco** for the code
   editor, **Zustand** for editor state
 - **Pyodide 0.29** (CPython on WebAssembly) + **networkx** in a Web Worker
 - **Vercel** for app deploys, **GitHub Actions** for CI + DB migrations
@@ -42,7 +42,7 @@ canvas graph (Zustand) ──▶ worker.postMessage({ runId, prelude, code, grap
      { frame } / { stdout } / { done } / { error } ──▶ editor store
                                     │
         playback engine folds frames[0..playhead) into visual state
-        each render ──▶ React Flow nodes/edges re-style themselves
+        each render ──▶ Pixi nodes/edges re-style themselves
 ```
 
 Key properties:
