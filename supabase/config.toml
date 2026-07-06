@@ -57,12 +57,13 @@ enable_signup = true
 enable_anonymous_sign_ins = false
 minimum_password_length = 8
 
-# Email/password auth is disabled — the app signs in with GitHub and Google
-# OAuth only (components/auth/login-form.tsx). Disable the Email provider in the
-# hosted Supabase dashboard to match. Kept here so local `supabase start` stays
-# valid if email is ever re-enabled.
+# The app signs in with GitHub/Google OAuth only (components/auth/login-form.tsx),
+# and the Email provider is turned off in the hosted Supabase dashboard. Email
+# stays enabled here for LOCAL dev only: the RLS integration tests mint
+# authenticated sessions via signInWithPassword (tests/integration/*), which the
+# provider must be enabled to serve. It is never reachable from the app UI.
 [auth.email]
-enable_signup = false
+enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
 secure_password_change = false
