@@ -1,18 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
-import { CheckEmail } from "@/components/auth/check-email";
-import { PasswordInput } from "@/components/auth/password-input";
-import { SignUpForm } from "@/components/auth/sign-up-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/supabase/client";
 
 function GithubIcon(props: React.ComponentProps<"svg">) {
@@ -40,13 +32,8 @@ function GoogleIcon(props: React.ComponentProps<"svg">) {
 type Provider = "github" | "google";
 
 export function LoginForm({ next = "/" }: { next?: string }) {
-  const router = useRouter();
-  const [pending, setPending] = useState<Provider | "email" | null>(null);
+  const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  // When set, a signup (or unconfirmed sign-in) is awaiting email verification.
-  const [verifyingEmail, setVerifyingEmail] = useState<string | null>(null);
 
   async function signInWithProvider(provider: Provider) {
     setPending(provider);
@@ -62,43 +49,6 @@ export function LoginForm({ next = "/" }: { next?: string }) {
       setError(error.message);
       setPending(null);
     }
-  }
-
-  async function submitSignIn(event: React.FormEvent) {
-    event.preventDefault();
-    setPending("email");
-    setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) {
-      // Unconfirmed account: send them to the resend panel instead of a dead end.
-      if (/email not confirmed/i.test(error.message)) {
-        setVerifyingEmail(email);
-        setPending(null);
-        return;
-      }
-      setError(error.message);
-      setPending(null);
-      return;
-    }
-    router.push(next);
-    router.refresh();
-  }
-
-  if (verifyingEmail) {
-    return (
-      <CheckEmail
-        email={verifyingEmail}
-        next={next}
-        onBack={() => {
-          setVerifyingEmail(null);
-          setError(null);
-        }}
-      />
-    );
   }
 
   return (
@@ -129,59 +79,6 @@ export function LoginForm({ next = "/" }: { next?: string }) {
           Continue with Google
         </Button>
       </div>
-
-      <div className="flex items-center gap-3">
-        <Separator className="flex-1" />
-        <span className="text-xs text-muted-foreground">or with email</span>
-        <Separator className="flex-1" />
-      </div>
-
-      <Tabs defaultValue="sign-in">
-        <TabsList className="w-full">
-          <TabsTrigger value="sign-in" className="flex-1">
-            Sign in
-          </TabsTrigger>
-          <TabsTrigger value="sign-up" className="flex-1">
-            Sign up
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="sign-in" className="pt-2">
-          <form className="grid gap-3" onSubmit={submitSignIn}>
-            <div className="grid gap-1.5">
-              <Label htmlFor="signin-email">Email</Label>
-              <Input
-                id="signin-email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="signin-password">Password</Label>
-              <PasswordInput
-                id="signin-password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            <Button type="submit" disabled={pending !== null} className="mt-1">
-              {pending === "email" && <Loader2 className="animate-spin" />}
-              Sign in
-            </Button>
-          </form>
-        </TabsContent>
-        <TabsContent value="sign-up" className="pt-2">
-          <SignUpForm
-            next={next}
-            disabled={pending !== null}
-            onSignedUp={setVerifyingEmail}
-          />
-        </TabsContent>
-      </Tabs>
 
       {error && (
         <Alert variant="destructive">

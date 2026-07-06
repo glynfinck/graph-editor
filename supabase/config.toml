@@ -57,29 +57,18 @@ enable_signup = true
 enable_anonymous_sign_ins = false
 minimum_password_length = 8
 
+# Email/password auth is disabled — the app signs in with GitHub and Google
+# OAuth only (components/auth/login-form.tsx). Disable the Email provider in the
+# hosted Supabase dashboard to match. Kept here so local `supabase start` stays
+# valid if email is ever re-enabled.
 [auth.email]
-enable_signup = true
+enable_signup = false
 double_confirm_changes = true
-# Email verification is ON in production (configured in the hosted Supabase
-# dashboard). Locally it's OFF so signups sign in immediately without detouring
-# through the mail catcher — local emails are only captured by Mailpit on :54334
-# (see [local_smtp]), never delivered to a real inbox. Real delivery needs SMTP,
-# which only matters in production. Flip this to `true` to exercise the full
-# verification flow locally (the /auth/callback route + the confirmation
-# template below handle it end-to-end).
 enable_confirmations = false
 secure_password_change = false
 max_frequency = "1s"
 otp_length = 6
 otp_expiry = 3600
-
-# Custom confirmation email. The default template links to GoTrue's /verify,
-# which returns the session in a URL fragment a server route can't read; this
-# template links to /auth/callback with a token_hash the route verifies (the
-# SSR flow). See supabase/templates/confirmation.html.
-[auth.email.template.confirmation]
-subject = "Confirm your email address"
-content_path = "./supabase/templates/confirmation.html"
 
 # Local-dev GitHub sign-in. Set both env vars before `supabase start`
 # (create an OAuth app with callback http://127.0.0.1:54331/auth/v1/callback).
