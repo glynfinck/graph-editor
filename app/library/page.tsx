@@ -25,15 +25,26 @@ import {
   ListPageShell,
 } from "@/components/site/list-page";
 import { ListToolbar } from "@/components/site/list-toolbar";
+import {
+  ListNavProvider,
+  PendingOverlay,
+} from "@/components/site/list-transition";
 import { Pager } from "@/components/site/pager";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { getLibrary, type Library } from "@/lib/data/library";
+import {
+  getLibraryPage,
+  GRID_PAGE,
+  POSTS_CAP,
+  POSTS_PAGE,
+  SECTION_CAP,
+  TABLE_PAGE,
+  type Library,
+  type RecentItem,
+} from "@/lib/data/library";
 import { formatRelativeTime, readingTimeMinutes } from "@/lib/format";
 import {
   LIBRARY_SORTS,
-  matchesQuery,
-  paginate,
   parseParam,
   parsePage,
   sortLibraryItems,
@@ -45,15 +56,6 @@ export const dynamic = "force-dynamic";
 const TABS = ["all", "projects", "graphs", "posts"] as const;
 const VIEWS = ["grid", "table"] as const;
 const SORT_VALUES = LIBRARY_SORTS.map((sort) => sort.value);
-
-const RECENT_LIMIT = 3;
-// per-page sizes for the paginated single-tab views and the table
-const GRID_PAGE = 12;
-const POSTS_PAGE = 10;
-const TABLE_PAGE = 20;
-// the combined view shows a preview of each type; "View all" opens the tab
-const SECTION_CAP = 6;
-const POSTS_CAP = 4;
 
 function SectionHeading({
   label,
@@ -81,6 +83,23 @@ function SectionHeading({
   );
 }
 
+const RECENT_ICONS = {
+  project: FolderCode,
+  graph: Waypoints,
+  post: Newspaper,
+} as const;
+
+function recentHref(item: RecentItem): string {
+  switch (item.type) {
+    case "project":
+      return `/projects/${item.id}`;
+    case "graph":
+      return `/graphs/${item.id}`;
+    default:
+      return item.isPublished ? `/posts/${item.id}` : `/posts/${item.id}/edit`;
+  }
+}
+
 export default async function LibraryPage({
   searchParams,
 }: {
@@ -93,8 +112,19 @@ export default async function LibraryPage({
   const q = typeof params.q === "string" ? params.q : "";
   const requestedPage = parsePage(params.page);
 
-  const { user, projects, graphs, posts, previews, forkSources } =
-    await getLibrary();
+  const {
+    user,
+    projects,
+    projectsTotal,
+    graphs,
+    graphsTotal,
+    posts,
+    postsTotal,
+    page,
+    previews,
+    forkSources,
+    recent,
+  } = await getLibraryPage({ tab, view, sort, q, page: requestedPage });
 
   if (!user) {
     return (
@@ -134,84 +164,30 @@ export default async function LibraryPage({
   }
 
   // canonical URL for the current filters, varying tab and page
-  const libHref = (toTab: (typeof TABS)[number], page = 1) => {
+  const libHref = (toTab: (typeof TABS)[number], toPage = 1) => {
     const sp = new URLSearchParams();
     if (toTab !== "all") sp.set("tab", toTab);
     if (q) sp.set("q", q);
     if (sort !== "updated") sp.set("sort", sort);
     if (view !== "grid") sp.set("view", view);
-    if (page > 1) sp.set("page", String(page));
+    if (toPage > 1) sp.set("page", String(toPage));
     const qs = sp.toString();
     return qs ? `/library?${qs}` : "/library";
   };
 
-  const filteredProjects = sortLibraryItems(
-    projects.filter((p) => matchesQuery(q, p.name, p.description)),
-    sort,
-    (p) => ({ name: p.name, created: p.created_at, updated: p.updated_at, likes: 0 }),
-  );
-  const filteredGraphs = sortLibraryItems(
-    graphs.filter((g) => matchesQuery(q, g.name, g.description)),
-    sort,
-    (g) => ({
-      name: g.name,
-      created: g.created_at,
-      updated: g.updated_at,
-      likes: g.likeCount,
-    }),
-  );
-  const filteredPosts = sortLibraryItems(
-    posts.filter((p) => matchesQuery(q, p.title, p.body)),
-    sort,
-    (p) => ({
-      name: p.title,
-      created: p.created_at,
-      updated: p.updated_at,
-      likes: p.likeCount,
-    }),
-  );
-
   const showProjects =
-    (tab === "all" || tab === "projects") && filteredProjects.length > 0;
-  const showGraphs =
-    (tab === "all" || tab === "graphs") && filteredGraphs.length > 0;
-  const showPosts =
-    (tab === "all" || tab === "posts") && filteredPosts.length > 0;
+    (tab === "all" || tab === "projects") && projectsTotal > 0;
+  const showGraphs = (tab === "all" || tab === "graphs") && graphsTotal > 0;
+  const showPosts = (tab === "all" || tab === "posts") && postsTotal > 0;
   const nothingVisible = !showProjects && !showGraphs && !showPosts;
 
-  // "jump back in": the most recently touched things, across all types
-  const recent = [
-    ...projects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      updated: p.updated_at,
-      href: `/projects/${p.id}`,
-      Icon: FolderCode,
-    })),
-    ...graphs.map((g) => ({
-      id: g.id,
-      name: g.name,
-      updated: g.updated_at,
-      href: `/graphs/${g.id}`,
-      Icon: Waypoints,
-    })),
-    ...posts.map((p) => ({
-      id: p.id,
-      name: p.title,
-      updated: p.updated_at,
-      href: p.is_published ? `/posts/${p.id}` : `/posts/${p.id}/edit`,
-      Icon: Newspaper,
-    })),
-  ]
-    .sort((a, b) => b.updated.localeCompare(a.updated))
-    .slice(0, RECENT_LIMIT);
-  const showRecent =
-    tab === "all" && view === "grid" && !q && recent.length > 0;
-
+  // table rows for the current tab. On a single tab the slice already IS the
+  // requested page; the combined tab interleaves per-type windows that cover
+  // everything up to the requested page, then slices after sorting.
   const rows: LibraryRow[] = sortLibraryItems(
     [
       ...(tab === "all" || tab === "projects"
-        ? filteredProjects.map(
+        ? projects.map(
             (p): LibraryRow => ({
               type: "project",
               id: p.id,
@@ -226,7 +202,7 @@ export default async function LibraryPage({
           )
         : []),
       ...(tab === "all" || tab === "graphs"
-        ? filteredGraphs.map(
+        ? graphs.map(
             (g): LibraryRow => ({
               type: "graph",
               id: g.id,
@@ -243,7 +219,7 @@ export default async function LibraryPage({
           )
         : []),
       ...(tab === "all" || tab === "posts"
-        ? filteredPosts.map(
+        ? posts.map(
             (p): LibraryRow => ({
               type: "post",
               id: p.id,
@@ -267,11 +243,24 @@ export default async function LibraryPage({
       likes: row.likeCount ?? 0,
     }),
   );
-  const pagedRows = paginate(rows, requestedPage, TABLE_PAGE);
 
-  const pagedProjects = paginate(filteredProjects, requestedPage, GRID_PAGE);
-  const pagedGraphs = paginate(filteredGraphs, requestedPage, GRID_PAGE);
-  const pagedPosts = paginate(filteredPosts, requestedPage, POSTS_PAGE);
+  const activeTotal =
+    tab === "projects"
+      ? projectsTotal
+      : tab === "graphs"
+        ? graphsTotal
+        : tab === "posts"
+          ? postsTotal
+          : projectsTotal + graphsTotal + postsTotal;
+  const tablePageCount = Math.max(1, Math.ceil(activeTotal / TABLE_PAGE));
+  const tablePage = tab === "all" ? Math.min(requestedPage, tablePageCount) : page;
+  const tableRows =
+    tab === "all"
+      ? rows.slice((tablePage - 1) * TABLE_PAGE, tablePage * TABLE_PAGE)
+      : rows;
+
+  const gridPageCount = (total: number, perPage: number) =>
+    Math.max(1, Math.ceil(total / perPage));
 
   const projectCard = (project: Library["projects"][number]) => (
     <ProjectCard
@@ -327,187 +316,193 @@ export default async function LibraryPage({
         action={headerAction}
       />
 
-      {showRecent && (
+      {recent.length > 0 && (
         <section className="mt-8">
           <h2 className="text-sm font-medium text-muted-foreground">
             Jump back in
           </h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            {recent.map((item) => (
-              <Card
-                key={item.href}
-                className="relative gap-0 py-3 transition-colors hover:border-ring/40"
-              >
-                <CardHeader className="flex items-center gap-2.5 px-4">
-                  <item.Icon className="size-4 shrink-0 text-brand" />
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      href={item.href}
-                      className="block truncate text-sm font-medium hover:underline"
-                    >
-                      <span className="absolute inset-0" aria-hidden />
-                      {item.name}
-                    </Link>
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelativeTime(item.updated)}
-                    </span>
-                  </div>
-                </CardHeader>
-              </Card>
-            ))}
+            {recent.map((item) => {
+              const Icon = RECENT_ICONS[item.type];
+              const href = recentHref(item);
+              return (
+                <Card
+                  key={href}
+                  className="relative gap-0 py-3 transition-colors hover:border-ring/40"
+                >
+                  <CardHeader className="flex items-center gap-2.5 px-4">
+                    <Icon className="size-4 shrink-0 text-brand" />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={href}
+                        className="block truncate text-sm font-medium hover:underline"
+                      >
+                        <span className="absolute inset-0" aria-hidden />
+                        {item.name}
+                      </Link>
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeTime(item.updated)}
+                      </span>
+                    </div>
+                  </CardHeader>
+                </Card>
+              );
+            })}
           </div>
         </section>
       )}
 
-      <div className="mt-8">
-        <ListToolbar
-          chips={[
-            { value: "all", label: "All" },
-            { value: "projects", label: "Projects", count: filteredProjects.length },
-            { value: "graphs", label: "Graphs", count: filteredGraphs.length },
-            { value: "posts", label: "Posts", count: filteredPosts.length },
-          ]}
-          chipParam="tab"
-          activeChip={tab}
-          sorts={LIBRARY_SORTS}
-          activeSort={sort}
-          defaultSort="updated"
-          searchPlaceholder="Search your work…"
-          initialQuery={q}
-          viewToggle
-          activeView={view}
-        />
-      </div>
-
-      {nothingVisible ? (
-        <EmptyStateCard className="mt-6">
-          {q ? (
-            <>No matches for “{q}”.</>
-          ) : tab === "graphs" ? (
-            <>
-              No graphs yet — create one, or duplicate one from{" "}
-              <Link
-                href="/explore"
-                className="text-brand underline underline-offset-4"
-              >
-                Explore
-              </Link>
-              .
-            </>
-          ) : tab === "posts" ? (
-            <>Nothing written yet — share how an algorithm works.</>
-          ) : (
-            <>
-              Nothing here yet — create a project to edit code and graphs side
-              by side.
-            </>
-          )}
-        </EmptyStateCard>
-      ) : view === "table" ? (
-        <div className="mt-6">
-          <LibraryTable rows={pagedRows.pageItems} />
-          <Pager
-            page={pagedRows.page}
-            pageCount={pagedRows.pageCount}
-            href={(page) => libHref(tab, page)}
+      <ListNavProvider>
+        <div className="mt-8">
+          <ListToolbar
+            chips={[
+              { value: "all", label: "All" },
+              { value: "projects", label: "Projects", count: projectsTotal },
+              { value: "graphs", label: "Graphs", count: graphsTotal },
+              { value: "posts", label: "Posts", count: postsTotal },
+            ]}
+            chipParam="tab"
+            activeChip={tab}
+            sorts={LIBRARY_SORTS}
+            activeSort={sort}
+            defaultSort="updated"
+            searchPlaceholder="Search your work…"
+            initialQuery={q}
+            viewToggle
+            activeView={view}
           />
         </div>
-      ) : tab === "all" ? (
-        <>
-          {showProjects && (
-            <section className="mt-6">
-              <SectionHeading
-                label="Projects"
-                count={filteredProjects.length}
-                cap={SECTION_CAP}
-                href={libHref("projects")}
+
+        <PendingOverlay>
+          {nothingVisible ? (
+            <EmptyStateCard className="mt-6">
+              {q ? (
+                <>No matches for “{q}”.</>
+              ) : tab === "graphs" ? (
+                <>
+                  No graphs yet — create one, or duplicate one from{" "}
+                  <Link
+                    href="/explore"
+                    className="text-brand underline underline-offset-4"
+                  >
+                    Explore
+                  </Link>
+                  .
+                </>
+              ) : tab === "posts" ? (
+                <>Nothing written yet — share how an algorithm works.</>
+              ) : (
+                <>
+                  Nothing here yet — create a project to edit code and graphs
+                  side by side.
+                </>
+              )}
+            </EmptyStateCard>
+          ) : view === "table" ? (
+            <div className="mt-6">
+              <LibraryTable rows={tableRows} />
+              <Pager
+                page={tablePage}
+                pageCount={tablePageCount}
+                prevHref={libHref(tab, tablePage - 1)}
+                nextHref={libHref(tab, tablePage + 1)}
               />
-              <CardGrid>
-                {filteredProjects.slice(0, SECTION_CAP).map(projectCard)}
-              </CardGrid>
-            </section>
-          )}
-          {showGraphs && (
-            <section className="mt-6">
-              <SectionHeading
-                label="Graphs"
-                count={filteredGraphs.length}
-                cap={SECTION_CAP}
-                href={libHref("graphs")}
-              />
-              <CardGrid>
-                {filteredGraphs.slice(0, SECTION_CAP).map((graph) => (
-                  <GraphCard
-                    key={graph.id}
-                    graph={graph}
-                    canDelete
-                    signedIn
-                    preview={previews[graph.id] ?? null}
+            </div>
+          ) : tab === "all" ? (
+            <>
+              {showProjects && (
+                <section className="mt-6">
+                  <SectionHeading
+                    label="Projects"
+                    count={projectsTotal}
+                    cap={SECTION_CAP}
+                    href={libHref("projects")}
                   />
-                ))}
-              </CardGrid>
-            </section>
-          )}
-          {showPosts && (
-            <section className="mt-6">
-              <SectionHeading
-                label="Posts"
-                count={filteredPosts.length}
-                cap={POSTS_CAP}
-                href={libHref("posts")}
-              />
-              <div className="grid gap-3">
-                {filteredPosts.slice(0, POSTS_CAP).map(postCard)}
-              </div>
-            </section>
-          )}
-        </>
-      ) : (
-        <section className="mt-6">
-          {tab === "projects" && (
-            <>
-              <CardGrid>{pagedProjects.pageItems.map(projectCard)}</CardGrid>
-              <Pager
-                page={pagedProjects.page}
-                pageCount={pagedProjects.pageCount}
-                href={(page) => libHref(tab, page)}
-              />
-            </>
-          )}
-          {tab === "graphs" && (
-            <>
-              <CardGrid>
-                {pagedGraphs.pageItems.map((graph) => (
-                  <GraphCard
-                    key={graph.id}
-                    graph={graph}
-                    canDelete
-                    signedIn
-                    preview={previews[graph.id] ?? null}
+                  <CardGrid>{projects.map(projectCard)}</CardGrid>
+                </section>
+              )}
+              {showGraphs && (
+                <section className="mt-6">
+                  <SectionHeading
+                    label="Graphs"
+                    count={graphsTotal}
+                    cap={SECTION_CAP}
+                    href={libHref("graphs")}
                   />
-                ))}
-              </CardGrid>
-              <Pager
-                page={pagedGraphs.page}
-                pageCount={pagedGraphs.pageCount}
-                href={(page) => libHref(tab, page)}
-              />
+                  <CardGrid>
+                    {graphs.map((graph) => (
+                      <GraphCard
+                        key={graph.id}
+                        graph={graph}
+                        canDelete
+                        signedIn
+                        preview={previews[graph.id] ?? null}
+                      />
+                    ))}
+                  </CardGrid>
+                </section>
+              )}
+              {showPosts && (
+                <section className="mt-6">
+                  <SectionHeading
+                    label="Posts"
+                    count={postsTotal}
+                    cap={POSTS_CAP}
+                    href={libHref("posts")}
+                  />
+                  <div className="grid gap-3">{posts.map(postCard)}</div>
+                </section>
+              )}
             </>
+          ) : (
+            <section className="mt-6">
+              {tab === "projects" && (
+                <>
+                  <CardGrid>{projects.map(projectCard)}</CardGrid>
+                  <Pager
+                    page={page}
+                    pageCount={gridPageCount(projectsTotal, GRID_PAGE)}
+                    prevHref={libHref(tab, page - 1)}
+                    nextHref={libHref(tab, page + 1)}
+                  />
+                </>
+              )}
+              {tab === "graphs" && (
+                <>
+                  <CardGrid>
+                    {graphs.map((graph) => (
+                      <GraphCard
+                        key={graph.id}
+                        graph={graph}
+                        canDelete
+                        signedIn
+                        preview={previews[graph.id] ?? null}
+                      />
+                    ))}
+                  </CardGrid>
+                  <Pager
+                    page={page}
+                    pageCount={gridPageCount(graphsTotal, GRID_PAGE)}
+                    prevHref={libHref(tab, page - 1)}
+                    nextHref={libHref(tab, page + 1)}
+                  />
+                </>
+              )}
+              {tab === "posts" && (
+                <>
+                  <div className="grid gap-3">{posts.map(postCard)}</div>
+                  <Pager
+                    page={page}
+                    pageCount={gridPageCount(postsTotal, POSTS_PAGE)}
+                    prevHref={libHref(tab, page - 1)}
+                    nextHref={libHref(tab, page + 1)}
+                  />
+                </>
+              )}
+            </section>
           )}
-          {tab === "posts" && (
-            <>
-              <div className="grid gap-3">
-                {pagedPosts.pageItems.map(postCard)}
-              </div>
-              <Pager
-                page={pagedPosts.page}
-                pageCount={pagedPosts.pageCount}
-                href={(page) => libHref(tab, page)}
-              />
-            </>
-          )}
-        </section>
-      )}
+        </PendingOverlay>
+      </ListNavProvider>
     </ListPageShell>
   );
 }
