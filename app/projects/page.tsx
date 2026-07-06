@@ -1,57 +1,15 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { NewProjectDialog } from "@/components/projects/new-project-dialog";
-import { ProjectCard } from "@/components/projects/project-card";
-import {
-  CardGrid,
-  EmptyStateCard,
-  ListPageHeader,
-  ListPageShell,
-} from "@/components/site/list-page";
-import { Button } from "@/components/ui/button";
-import { getOwnProjects } from "@/lib/data/projects";
+import { createClient } from "@/lib/supabase/server";
 
-export const metadata: Metadata = { title: "Projects" };
 export const dynamic = "force-dynamic";
 
+/** The projects list moved into the library; the route stays for old links. */
 export default async function ProjectsPage() {
-  const { user, projects } = await getOwnProjects();
-
-  return (
-    <ListPageShell>
-      <ListPageHeader
-        title="Projects"
-        description="Multi-file Python workspaces — edit code and graphs side by side."
-        action={
-          user ? (
-            <NewProjectDialog />
-          ) : (
-            <Button asChild>
-              <Link href="/login?next=/projects">Sign in to create</Link>
-            </Button>
-          )
-        }
-      />
-
-      <section className="mt-8">
-        {!user ? (
-          <EmptyStateCard>
-            Projects are private to your account — sign in to see yours.
-          </EmptyStateCard>
-        ) : projects.length === 0 ? (
-          <EmptyStateCard>
-            No projects yet — create one to organize algorithms across multiple
-            files.
-          </EmptyStateCard>
-        ) : (
-          <CardGrid>
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-          </CardGrid>
-        )}
-      </section>
-    </ListPageShell>
-  );
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // signed-out visitors get the interactive demo instead of an empty list
+  redirect(user ? "/library?tab=projects" : "/projects/demo");
 }
