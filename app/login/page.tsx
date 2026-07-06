@@ -35,9 +35,9 @@ export default async function LoginPage({
     <div className="flex flex-1 items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Welcome back</CardTitle>
+          <CardTitle>Welcome</CardTitle>
           <CardDescription>
-            Sign in to create, save and share graphs.
+            Sign in or create an account to build, save and share graphs.
             {params.error === "auth" && (
               <span className="mt-1 block text-destructive">
                 Something went wrong signing you in — please try again.

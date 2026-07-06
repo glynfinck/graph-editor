@@ -1,0 +1,30 @@
+<!--
+  Signup confirmation email.
+
+  The link points at our OWN /auth/callback route with a token_hash so the
+  server can verify it with supabase.auth.verifyOtp() and set the session
+  cookie (the SSR flow). Do NOT switch this back to {{ .ConfirmationURL }}:
+  that hits GoTrue's /verify directly and returns the session in a URL
+  fragment, which a server route handler can't read.
+
+  {{ .RedirectTo }} is the emailRedirectTo passed at signup
+  (e.g. http://localhost:3000/auth/callback?next=/), so we just append the
+  token to its existing query string.
+-->
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #111;">
+  <h2 style="font-size: 20px; margin: 0 0 12px;">Confirm your email</h2>
+  <p style="font-size: 14px; line-height: 1.5; color: #444; margin: 0 0 20px;">
+    Welcome! Confirm your email address to finish setting up your account.
+  </p>
+  <p style="margin: 0 0 24px;">
+    <a
+      href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=signup"
+      style="display: inline-block; background: #111; color: #fff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 10px 18px; border-radius: 8px;"
+    >
+      Confirm your email
+    </a>
+  </p>
+  <p style="font-size: 12px; line-height: 1.5; color: #888; margin: 0;">
+    If you didn't create an account, you can safely ignore this email.
+  </p>
+</div>

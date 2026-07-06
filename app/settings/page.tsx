@@ -35,6 +35,8 @@ export default async function SettingsPage() {
         <CardContent>
           <ProfileForm
             initialDisplayName={profile?.display_name ?? ""}
+            initialFirstName={profile?.first_name ?? ""}
+            initialLastName={profile?.last_name ?? ""}
             initialAvatarUrl={profile?.avatar_url ?? ""}
           />
         </CardContent>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { LogOut, Settings, Waypoints } from "lucide-react";
+import { LibraryBig, LogOut, Settings } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -81,8 +81,8 @@ export function AuthButton() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/graphs">
-            <Waypoints /> My graphs
+          <Link href="/library">
+            <LibraryBig /> Library
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

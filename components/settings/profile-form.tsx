@@ -12,12 +12,18 @@ import { updateProfile } from "@/lib/actions/profiles";
 
 export function ProfileForm({
   initialDisplayName,
+  initialFirstName,
+  initialLastName,
   initialAvatarUrl,
 }: {
   initialDisplayName: string;
+  initialFirstName: string;
+  initialLastName: string;
   initialAvatarUrl: string;
 }) {
   const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [firstName, setFirstName] = useState(initialFirstName);
+  const [lastName, setLastName] = useState(initialLastName);
   const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
   const [pending, startTransition] = useTransition();
 
@@ -25,6 +31,8 @@ export function ProfileForm({
     startTransition(async () => {
       const result = await updateProfile({
         display_name: displayName,
+        first_name: firstName,
+        last_name: lastName,
         avatar_url: avatarUrl,
       });
       if (result.ok) toast.success("Profile saved");
@@ -58,6 +66,28 @@ export function ProfileForm({
           />
         </div>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="first-name">First name</Label>
+          <Input
+            id="first-name"
+            autoComplete="given-name"
+            maxLength={80}
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="last-name">Last name</Label>
+          <Input
+            id="last-name"
+            autoComplete="family-name"
+            maxLength={80}
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
+          />
+        </div>
+      </div>
       <div className="grid gap-1.5">
         <Label htmlFor="display-name">Display name</Label>
         <Input
@@ -67,6 +97,9 @@ export function ProfileForm({
           value={displayName}
           onChange={(event) => setDisplayName(event.target.value)}
         />
+        <p className="text-xs text-muted-foreground">
+          Shown alongside anything you share.
+        </p>
       </div>
       <div>
         <Button type="submit" disabled={pending}>

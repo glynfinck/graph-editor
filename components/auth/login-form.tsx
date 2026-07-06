@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import { CheckEmail } from "@/components/auth/check-email";
+import { PasswordInput } from "@/components/auth/password-input";
+import { SignUpForm } from "@/components/auth/sign-up-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,9 +43,10 @@ export function LoginForm({ next = "/" }: { next?: string }) {
   const router = useRouter();
   const [pending, setPending] = useState<Provider | "email" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // When set, a signup (or unconfirmed sign-in) is awaiting email verification.
+  const [verifyingEmail, setVerifyingEmail] = useState<string | null>(null);
 
   async function signInWithProvider(provider: Provider) {
     setPending(provider);
@@ -60,85 +64,42 @@ export function LoginForm({ next = "/" }: { next?: string }) {
     }
   }
 
-  async function submitEmail(mode: "sign-in" | "sign-up") {
+  async function submitSignIn(event: React.FormEvent) {
+    event.preventDefault();
     setPending("email");
     setError(null);
-    setNotice(null);
     const supabase = createClient();
-
-    if (mode === "sign-in") {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) {
-        setError(error.message);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      // Unconfirmed account: send them to the resend panel instead of a dead end.
+      if (/email not confirmed/i.test(error.message)) {
+        setVerifyingEmail(email);
         setPending(null);
         return;
       }
-      router.push(next);
-      router.refresh();
-      return;
-    }
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
-    if (error) {
       setError(error.message);
       setPending(null);
       return;
     }
-    if (data.session) {
-      router.push(next);
-      router.refresh();
-      return;
-    }
-    setNotice("Check your email for a confirmation link to finish signing up.");
-    setPending(null);
+    router.push(next);
+    router.refresh();
   }
 
-  const emailFields = (mode: "sign-in" | "sign-up") => (
-    <form
-      className="grid gap-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submitEmail(mode);
-      }}
-    >
-      <div className="grid gap-1.5">
-        <Label htmlFor={`email-${mode}`}>Email</Label>
-        <Input
-          id={`email-${mode}`}
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`password-${mode}`}>Password</Label>
-        <Input
-          id={`password-${mode}`}
-          type="password"
-          autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </div>
-      <Button type="submit" disabled={pending !== null} className="mt-1">
-        {pending === "email" && <Loader2 className="animate-spin" />}
-        {mode === "sign-in" ? "Sign in" : "Create account"}
-      </Button>
-    </form>
-  );
+  if (verifyingEmail) {
+    return (
+      <CheckEmail
+        email={verifyingEmail}
+        next={next}
+        onBack={() => {
+          setVerifyingEmail(null);
+          setError(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="grid gap-4">
@@ -185,21 +146,46 @@ export function LoginForm({ next = "/" }: { next?: string }) {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="sign-in" className="pt-2">
-          {emailFields("sign-in")}
+          <form className="grid gap-3" onSubmit={submitSignIn}>
+            <div className="grid gap-1.5">
+              <Label htmlFor="signin-email">Email</Label>
+              <Input
+                id="signin-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="signin-password">Password</Label>
+              <PasswordInput
+                id="signin-password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <Button type="submit" disabled={pending !== null} className="mt-1">
+              {pending === "email" && <Loader2 className="animate-spin" />}
+              Sign in
+            </Button>
+          </form>
         </TabsContent>
         <TabsContent value="sign-up" className="pt-2">
-          {emailFields("sign-up")}
+          <SignUpForm
+            next={next}
+            disabled={pending !== null}
+            onSignedUp={setVerifyingEmail}
+          />
         </TabsContent>
       </Tabs>
 
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {notice && (
-        <Alert>
-          <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
     </div>
