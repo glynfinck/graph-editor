@@ -10,10 +10,17 @@ import {
   type Frame,
   type SourcePos,
 } from "@/lib/editor/frames";
-import { nextNodeLabel, type GraphDoc } from "@/lib/graph/types";
+import {
+  nextNodeLabel,
+  type AttributeValue,
+  type Attributes,
+  type GraphDoc,
+} from "@/lib/graph/types";
 
 export type GraphNodeData = {
   name: string;
+  /** open-ended attribute bag algorithms read (capacity, colour, …) */
+  attributes?: Attributes;
   /** decorations applied by the canvas during playback */
   visual?: ElementState;
   isCurrent?: boolean;
@@ -30,10 +37,12 @@ export type GraphFlowNode = {
   selected?: boolean;
 };
 
-/** Per-edge attributes: null = the "plain" (unweighted / unlabeled) case. */
+/** Per-edge attributes: null = the "plain" (unweighted / unlabeled) case.
+ *  `attributes` is the open-ended bag (algorithm inputs), like nodes'. */
 export type GraphEdgeData = {
   weight?: number | null;
   name?: string | null;
+  attributes?: Attributes;
 };
 
 /** An edge in the editor's flat document model (was React Flow's Edge). */
@@ -277,6 +286,13 @@ type EditorState = {
   setNodeName: (nodeId: string, name: string) => void;
   setEdgeWeight: (edgeId: string, weight: number | null) => void;
   setEdgeName: (edgeId: string, name: string | null) => void;
+  /** attribute-bag edits (UI-only); keys stay ordered on rename */
+  setNodeAttr: (nodeId: string, key: string, value: AttributeValue) => void;
+  renameNodeAttr: (nodeId: string, oldKey: string, newKey: string) => void;
+  removeNodeAttr: (nodeId: string, key: string) => void;
+  setEdgeAttr: (edgeId: string, key: string, value: AttributeValue) => void;
+  renameEdgeAttr: (edgeId: string, oldKey: string, newKey: string) => void;
+  removeEdgeAttr: (edgeId: string, key: string) => void;
   markSaved: () => void;
   toDoc: () => GraphDoc;
 
@@ -307,6 +323,29 @@ type EditorState = {
 // node/edge ids are uuids (the graph_nodes/graph_edges columns are uuid), so
 // client-minted ids must be real uuids too, not the old text scheme
 const freshId = () => crypto.randomUUID();
+
+/** An attribute bag with `key` removed (fresh object). */
+function without(attrs: Attributes | undefined, key: string): Attributes {
+  const next = { ...(attrs ?? {}) };
+  delete next[key];
+  return next;
+}
+
+/** Rename a key in place, preserving insertion order so a row being renamed in
+ *  the inspector doesn't jump to the end. No-op if oldKey is absent/unchanged. */
+function renameKey(
+  attrs: Attributes | undefined,
+  oldKey: string,
+  newKey: string,
+): Attributes {
+  const current = attrs ?? {};
+  if (oldKey === newKey || !(oldKey in current)) return current;
+  const next: Attributes = {};
+  for (const [k, v] of Object.entries(current)) {
+    next[k === oldKey ? newKey : k] = v;
+  }
+  return next;
+}
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   graphId: "",
@@ -343,13 +382,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         id: node.id,
         type: "graphNode" as const,
         position: { x: node.x, y: node.y },
-        data: { name: node.name },
+        data: { name: node.name, attributes: node.attributes ?? {} },
       })),
       edges: doc.edges.map((edge) => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        data: { weight: edge.weight, name: edge.name },
+        data: {
+          weight: edge.weight,
+          name: edge.name,
+          attributes: edge.attributes ?? {},
+        },
       })),
       dirty: false,
       frames: [],
@@ -487,6 +530,96 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       dirty: true,
     })),
 
+  setNodeAttr: (nodeId, key, value) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === nodeId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                attributes: { ...(node.data.attributes ?? {}), [key]: value },
+              },
+            }
+          : node,
+      ),
+      dirty: true,
+    })),
+
+  renameNodeAttr: (nodeId, oldKey, newKey) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === nodeId
+          ? {
+              ...node,
+              data: {
+                ...node.data,
+                attributes: renameKey(node.data.attributes, oldKey, newKey),
+              },
+            }
+          : node,
+      ),
+      dirty: true,
+    })),
+
+  removeNodeAttr: (nodeId, key) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === nodeId
+          ? {
+              ...node,
+              data: { ...node.data, attributes: without(node.data.attributes, key) },
+            }
+          : node,
+      ),
+      dirty: true,
+    })),
+
+  setEdgeAttr: (edgeId, key, value) =>
+    set((state) => ({
+      edges: state.edges.map((edge) =>
+        edge.id === edgeId
+          ? {
+              ...edge,
+              data: {
+                ...edge.data,
+                attributes: { ...(edge.data?.attributes ?? {}), [key]: value },
+              },
+            }
+          : edge,
+      ),
+      dirty: true,
+    })),
+
+  renameEdgeAttr: (edgeId, oldKey, newKey) =>
+    set((state) => ({
+      edges: state.edges.map((edge) =>
+        edge.id === edgeId
+          ? {
+              ...edge,
+              data: {
+                ...edge.data,
+                attributes: renameKey(edge.data?.attributes, oldKey, newKey),
+              },
+            }
+          : edge,
+      ),
+      dirty: true,
+    })),
+
+  removeEdgeAttr: (edgeId, key) =>
+    set((state) => ({
+      edges: state.edges.map((edge) =>
+        edge.id === edgeId
+          ? {
+              ...edge,
+              data: { ...edge.data, attributes: without(edge.data?.attributes, key) },
+            }
+          : edge,
+      ),
+      dirty: true,
+    })),
+
   markSaved: () => set({ dirty: false }),
 
   toDoc: () => {
@@ -497,6 +630,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         name: node.data.name,
         x: Math.round(node.position.x),
         y: Math.round(node.position.y),
+        attributes: node.data.attributes ?? {},
       })),
       edges: edges.map((edge) => ({
         id: edge.id,
@@ -504,6 +638,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         target: edge.target,
         weight: edge.data?.weight ?? null,
         name: edge.data?.name ?? null,
+        attributes: edge.data?.attributes ?? {},
       })),
     };
   },

@@ -323,7 +323,11 @@ export default function PixiEditCanvas({
   }, [nodes, edges]);
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
+    <div
+      ref={containerRef}
+      data-testid="graph-canvas"
+      className="relative h-full w-full overflow-hidden"
+    >
       {showPlayback && (
         <div className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2">
           <div className="pointer-events-auto">

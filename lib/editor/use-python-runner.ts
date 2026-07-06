@@ -113,11 +113,13 @@ export function usePythonRunner() {
             name: node.data.name,
             x: Math.round(node.position.x),
             y: Math.round(node.position.y),
+            attributes: node.data.attributes ?? {},
           })),
           edges: state.edges.map((edge) => ({
             source: edge.source,
             target: edge.target,
             weight: edge.data?.weight ?? null,
+            attributes: edge.data?.attributes ?? {},
           })),
         },
         ...(files ? { files } : {}),

@@ -9,11 +9,40 @@ export const MAX_NODES = 5000;
 export const MAX_EDGES = 15000;
 
 /**
+ * Per-element attribute bag. `weight`/`name` are the built-in edge attributes;
+ * this is the open-ended bag algorithms read (a max-flow's capacity, a
+ * colouring's colour). Values are JSON scalars, and the caps keep a node/edge
+ * from blowing the ~1MB save budget the same way MAX_NODES/MAX_EDGES do.
+ * Editing is UI-only (the inspectors); Python reads, never writes.
+ */
+export const ATTR_KEY_MAX = 40;
+export const ATTR_VALUE_STR_MAX = 200;
+export const MAX_ATTRS_PER_ELEMENT = 32;
+
+export type AttributeValue = string | number | boolean;
+export type Attributes = Record<string, AttributeValue>;
+
+const attributeValueSchema = z.union([
+  z.string().max(ATTR_VALUE_STR_MAX),
+  z.number().finite(),
+  z.boolean(),
+]);
+
+export const attributesSchema = z
+  .record(z.string().min(1).max(ATTR_KEY_MAX), attributeValueSchema)
+  .refine(
+    (attrs) => Object.keys(attrs).length <= MAX_ATTRS_PER_ELEMENT,
+    `An element can have at most ${MAX_ATTRS_PER_ELEMENT} attributes`,
+  )
+  .default({});
+
+/**
  * The canvas document, assembled from the graph_nodes/graph_edges tables on
  * read and swapped atomically on save (replace_graph_doc). Node/edge ids are
- * uuids (36 chars). Per-edge `weight`/`name` are the generalized attributes —
- * a plain graph just leaves them null; `directed` lives on the graph row, not
- * in the document, and is threaded separately (see the editor store).
+ * uuids (36 chars). Per-edge `weight`/`name` are the built-in attributes — a
+ * plain graph just leaves them null; `attributes` is the open-ended bag on
+ * both nodes and edges. `directed` lives on the graph row, not in the
+ * document, and is threaded separately (see the editor store).
  */
 export const graphDocSchema = z.object({
   nodes: z
@@ -23,6 +52,7 @@ export const graphDocSchema = z.object({
         name: z.string().min(1).max(40),
         x: z.number().finite(),
         y: z.number().finite(),
+        attributes: attributesSchema,
       }),
     )
     .max(MAX_NODES, `A graph can have at most ${MAX_NODES} nodes`),
@@ -46,6 +76,7 @@ export const graphDocSchema = z.object({
           .max(40)
           .nullish()
           .transform((v) => (v ? v : null)),
+        attributes: attributesSchema,
       }),
     )
     .max(MAX_EDGES, `A graph can have at most ${MAX_EDGES} edges`),

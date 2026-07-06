@@ -44,6 +44,11 @@ class Graph:
     (when set) are read with getWeight(source, target); each node's canvas
     (x, y) is read with getPosition(node) — handy for A*-style heuristics.
 
+    Custom attributes set on a node/edge in the inspector are read with
+    getAttr(node, key) / getEdgeAttr(source, target, key), or in bulk via
+    getNodes(data=True) / getEdges(data=True). They're read-only from Python —
+    edit them in the editor.
+
     The canvas animates implicitly as the algorithm reads the graph:
       getNeighbors(node)   marks node visited (and promotes the edge it was
                            discovered through), then highlights each edge as
@@ -66,19 +71,32 @@ class Graph:
         self.G = nx.DiGraph() if self.directed else nx.Graph()
         self._pos = {}
         for node in data["nodes"]:
-            self.G.add_node(node["name"], id=node["id"])
+            # user attributes come along; the canonical "id" is reserved and
+            # always wins over a same-named user attribute
+            attrs = {
+                k: v
+                for k, v in (node.get("attributes") or {}).items()
+                if k != "id"
+            }
+            self.G.add_node(node["name"], id=node["id"], **attrs)
             self._pos[node["name"]] = (
                 float(node.get("x", 0.0)),
                 float(node.get("y", 0.0)),
             )
         for edge in data["edges"]:
             u, v = name_of[edge["source"]], name_of[edge["target"]]
+            # "weight" is reserved (getWeight reads it); user attrs come too
+            attrs = {
+                k: v
+                for k, v in (edge.get("attributes") or {}).items()
+                if k != "weight"
+            }
             weight = edge.get("weight")
             # unweighted edges carry no weight attr; getWeight() defaults them
             if weight is None:
-                self.G.add_edge(u, v)
+                self.G.add_edge(u, v, **attrs)
             else:
-                self.G.add_edge(u, v, weight=weight)
+                self.G.add_edge(u, v, weight=weight, **attrs)
         self._implicit = True
         self._expanded = set()
         self._discovered_via = {}
@@ -105,6 +123,21 @@ class Graph:
         if not self.G.has_edge(source, target):
             return default
         return self.G[source][target].get("weight", default)
+
+    def getAttr(self, node, key, default=None):
+        """A node's attribute (set in the editor's node inspector), or
+        \`default\` if the node has no such attribute. Values keep their type
+        (str / int / float / bool). Also visible via getNodes(data=True)."""
+        if not self.G.has_node(node):
+            return default
+        return self.G.nodes[node].get(key, default)
+
+    def getEdgeAttr(self, source, target, key, default=None):
+        """An edge's attribute (set in the editor's edge inspector), or
+        \`default\` if unset. Also visible via getEdges(data=True)."""
+        if not self.G.has_edge(source, target):
+            return default
+        return self.G[source][target].get(key, default)
 
     def getNeighbors(self, node):
         neighbors = self.G.adj[node]
