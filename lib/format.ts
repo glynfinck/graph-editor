@@ -21,6 +21,15 @@ export function excerpt(markdown: string, max = 200): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
+/** Rounded-up minutes at a ~200wpm reading pace, for post cards. */
+export function readingTimeMinutes(markdown: string): number {
+  const words = markdown
+    .replace(/```[\s\S]*?(```|$)/g, " ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return Math.max(1, Math.round(words / 200));
+}
+
 export function formatRelativeTime(iso: string): string {
   const delta = new Date(iso).getTime() - Date.now();
   const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });

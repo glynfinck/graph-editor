@@ -13,6 +13,7 @@ import {
   type GraphDoc,
 } from "@/lib/graph/types";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeTags } from "@/lib/tags";
 
 export type ActionResult =
   | { ok: true; id?: string }
@@ -51,6 +52,8 @@ export async function createGraph(input: {
   description?: string;
   /** directed graphs draw arrowheads and traverse successors only */
   directed?: boolean;
+  /** topic tags from the fixed taxonomy (lib/tags.ts) */
+  tags?: string[];
   /** optional initial document, e.g. local edits of a graph being copied */
   data?: unknown;
 }): Promise<ActionResult> {
@@ -80,6 +83,7 @@ export async function createGraph(input: {
       name: parsed.data.name,
       description: parsed.data.description,
       directed: input.directed ?? false,
+      tags: sanitizeTags(input.tags ?? []),
     })
     .select("id")
     .single();
@@ -95,6 +99,7 @@ export async function createGraph(input: {
   }
 
   revalidatePath("/graphs");
+  revalidatePath("/library");
   revalidatePath("/explore");
   revalidatePath("/");
   return { ok: true, id: data.id };
@@ -139,6 +144,7 @@ export async function saveGraph(
   if (docError) return { ok: false, error: docError };
 
   revalidatePath("/graphs");
+  revalidatePath("/library");
   revalidatePath("/explore");
   revalidatePath("/");
   revalidatePath(`/graphs/${id}`);
@@ -168,6 +174,60 @@ export async function renameGraph(
   if (!data?.length) return { ok: false, error: "You can't edit this graph." };
 
   revalidatePath("/graphs");
+  revalidatePath("/library");
+  revalidatePath("/explore");
+  revalidatePath("/");
+  revalidatePath(`/graphs/${id}`);
+  return { ok: true, id };
+}
+
+/**
+ * Flip a graph between private and public. Making one private doesn't chase
+ * down posts that embed it — publishing a post re-publishes its pinned
+ * graphs, and stale embeds degrade to plain links for other readers.
+ */
+export async function setGraphVisibility(
+  id: string,
+  isPublic: boolean,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { ok: false, error: "Sign in first." };
+
+  // RLS restricts the update to rows the caller owns.
+  const { data, error } = await supabase
+    .from("graphs")
+    .update({ is_public: isPublic })
+    .eq("id", id)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data?.length) return { ok: false, error: "You can't edit this graph." };
+
+  revalidatePath("/graphs");
+  revalidatePath("/library");
+  revalidatePath("/explore");
+  revalidatePath("/");
+  revalidatePath(`/graphs/${id}`);
+  return { ok: true, id };
+}
+
+/** Replace a graph's topic tags (unknown slugs are dropped). */
+export async function setGraphTags(
+  id: string,
+  tags: string[],
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { ok: false, error: "Sign in first." };
+
+  const { data, error } = await supabase
+    .from("graphs")
+    .update({ tags: sanitizeTags(tags) })
+    .eq("id", id)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data?.length) return { ok: false, error: "You can't edit this graph." };
+
+  revalidatePath("/graphs");
+  revalidatePath("/library");
   revalidatePath("/explore");
   revalidatePath("/");
   revalidatePath(`/graphs/${id}`);
@@ -189,6 +249,7 @@ export async function deleteGraph(id: string): Promise<ActionResult> {
   }
 
   revalidatePath("/graphs");
+  revalidatePath("/library");
   revalidatePath("/explore");
   revalidatePath("/");
   return { ok: true };
@@ -226,6 +287,7 @@ export async function toggleGraphLike(
 
   revalidatePath("/explore");
   revalidatePath("/graphs");
+  revalidatePath("/library");
   revalidatePath(`/graphs/${id}`);
   return { ok: true, id, liked: !existing };
 }
@@ -272,6 +334,7 @@ export async function duplicateGraph(id: string): Promise<ActionResult> {
   if ("error" in copied) return { ok: false, error: copied.error };
 
   revalidatePath("/graphs");
+  revalidatePath("/library");
   revalidatePath("/explore");
   revalidatePath("/");
   return { ok: true, id: copied.id };

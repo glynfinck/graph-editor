@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Compass, Newspaper } from "lucide-react";
+import { ArrowRight, Compass, LibraryBig } from "lucide-react";
 
 import { GraphCard } from "@/components/graphs/graph-card";
 import { NewProjectDialog } from "@/components/projects/new-project-dialog";
@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getVisibleGraphs } from "@/lib/data/graphs";
+import { getGraphPreviews, getVisibleGraphs } from "@/lib/data/graphs";
 import { getOwnProjects } from "@/lib/data/projects";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,6 +38,15 @@ export default async function Home() {
     getVisibleGraphs(),
   ]);
 
+  const recentProjects = projects.slice(0, RECENT_LIMIT);
+  const recentGraphs = mine.slice(0, RECENT_LIMIT);
+  const previews = await getGraphPreviews(supabase, [
+    ...recentGraphs.map((graph) => graph.id),
+    ...recentProjects
+      .map((project) => project.active_graph_id)
+      .filter((id): id is string => !!id),
+  ]);
+
   return (
     <ListPageShell>
       <ListPageHeader
@@ -52,67 +61,81 @@ export default async function Home() {
             Recent projects
           </h2>
           <Link
-            href="/projects"
+            href="/library?tab=projects"
             className="text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             All projects <ArrowRight className="inline size-3" />
           </Link>
         </div>
-        {projects.length === 0 ? (
+        {recentProjects.length === 0 ? (
           <EmptyStateCard className="mt-3">
             No projects yet — create one to edit code and graphs side by side.
           </EmptyStateCard>
         ) : (
           <CardGrid className="mt-3">
-            {projects.slice(0, RECENT_LIMIT).map((project) => (
-              <ProjectCard key={project.id} project={project} />
+            {recentProjects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                preview={
+                  project.active_graph_id
+                    ? (previews[project.active_graph_id] ?? null)
+                    : null
+                }
+              />
             ))}
           </CardGrid>
         )}
       </section>
 
-      {mine.length > 0 && (
+      {recentGraphs.length > 0 && (
         <section className="mt-8">
           <div className="flex items-baseline justify-between">
             <h2 className="text-sm font-medium text-muted-foreground">
               Your graphs
             </h2>
             <Link
-              href="/graphs"
+              href="/library?tab=graphs"
               className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               All graphs <ArrowRight className="inline size-3" />
             </Link>
           </div>
           <CardGrid className="mt-3">
-            {mine.slice(0, RECENT_LIMIT).map((graph) => (
-              <GraphCard key={graph.id} graph={graph} canDelete signedIn />
+            {recentGraphs.map((graph) => (
+              <GraphCard
+                key={graph.id}
+                graph={graph}
+                canDelete
+                signedIn
+                preview={previews[graph.id] ?? null}
+              />
             ))}
           </CardGrid>
         </section>
       )}
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2">
+        <Link href="/library" className="group">
+          <Card className="h-full transition-colors group-hover:border-ring/40">
+            <CardHeader>
+              <LibraryBig className="mb-2 size-5 text-brand" />
+              <CardTitle className="text-base">Library</CardTitle>
+              <CardDescription>
+                Everything you&apos;ve made — projects, graphs and posts, with
+                search and quick management.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
         <Link href="/explore" className="group">
           <Card className="h-full transition-colors group-hover:border-ring/40">
             <CardHeader>
               <Compass className="mb-2 size-5 text-brand" />
               <CardTitle className="text-base">Explore</CardTitle>
               <CardDescription>
-                Browse sample and community-published graphs, and run code
-                against them.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/posts" className="group">
-          <Card className="h-full transition-colors group-hover:border-ring/40">
-            <CardHeader>
-              <Newspaper className="mb-2 size-5 text-brand" />
-              <CardTitle className="text-base">Posts</CardTitle>
-              <CardDescription>
-                Community write-ups — algorithms explained, graphs to run them
-                on, projects to fork.
+                Lessons, community write-ups and public graphs — run code
+                against them or fork them into your own projects.
               </CardDescription>
             </CardHeader>
           </Card>

@@ -5,8 +5,9 @@ import { useEffect, useRef } from "react";
 import { frameDelayMs, useEditorStore } from "@/lib/editor/store";
 
 /**
- * Playback loop — one graph event per delay while playing (tick absorbs the
- * line frames in between, keeping code + canvas in lockstep).
+ * Playback loop — one graph event per delay while playing in "events" mode
+ * (tick absorbs the line frames in between, keeping code + canvas in
+ * lockstep); one frame per delay in "statements" mode.
  */
 export function usePlaybackLoop() {
   const playing = useEditorStore((s) => s.playing);

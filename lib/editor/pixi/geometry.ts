@@ -3,8 +3,8 @@
  * fit-to-view bounds, and point-to-segment distance (edge hit-testing). All in
  * world coordinates and free of any Pixi/DOM dependency.
  */
-import { NODE_DIAMETER } from "@/components/editor/graph-node";
-
+/** Node diameter in world units (the on-screen circle size). */
+export const NODE_DIAMETER = 56;
 export const R = NODE_DIAMETER / 2; // 28 — node radius
 export const AH = 11; // arrowhead length
 export const AW = 7; // arrowhead half-width

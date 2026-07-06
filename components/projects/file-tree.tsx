@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Tip } from "@/components/ui/tip";
 import { useProjectStore } from "@/lib/projects/store";
 import {
   buildFileTree,
@@ -115,23 +116,27 @@ function TreeLevel({
               <span className="truncate">{node.name}</span>
             </button>
             <span className="invisible flex shrink-0 items-center group-hover:visible">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Rename ${node.path}`}
-                onClick={() => onRename(node.path)}
-              >
-                <Pencil />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Delete ${node.path}`}
-                disabled={fileCount <= 1}
-                onClick={() => onDelete(node.path)}
-              >
-                <Trash2 />
-              </Button>
+              <Tip label="Rename this file">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Rename ${node.path}`}
+                  onClick={() => onRename(node.path)}
+                >
+                  <Pencil />
+                </Button>
+              </Tip>
+              <Tip label="Delete this file">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Delete ${node.path}`}
+                  disabled={fileCount <= 1}
+                  onClick={() => onDelete(node.path)}
+                >
+                  <Trash2 />
+                </Button>
+              </Tip>
             </span>
           </div>
         ),
@@ -198,20 +203,22 @@ export function FileTree() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
         <span className="text-xs font-medium">Files</span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="New file"
-          className="ml-auto"
-          disabled={paths.length >= MAX_PROJECT_FILES}
-          onClick={() => {
-            setPathInput("");
-            setError(null);
-            openDialog({ mode: "new" });
-          }}
-        >
-          <Plus />
-        </Button>
+        <Tip label="New file">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="New file"
+            className="ml-auto"
+            disabled={paths.length >= MAX_PROJECT_FILES}
+            onClick={() => {
+              setPathInput("");
+              setError(null);
+              openDialog({ mode: "new" });
+            }}
+          >
+            <Plus />
+          </Button>
+        </Tip>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
         <TreeLevel

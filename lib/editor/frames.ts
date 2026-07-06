@@ -128,21 +128,26 @@ export function computeVisualState(
 export type SourcePos = { file: string; line: number };
 
 /**
+ * Source position a single frame carries, if any. Frames without a file
+ * (single-file graph editor runs) default to the editor buffer.
+ */
+export function framePos(frame: Frame): SourcePos | null {
+  if (frame.kind === "clear") return null;
+  if (typeof frame.line !== "number") return null;
+  return { file: frame.file ?? "algorithm.py", line: frame.line };
+}
+
+/**
  * Source position the algorithm was at after frames[0..count) — drives the
  * code panels' highlights. Walks backwards to the nearest frame carrying line
- * info; a clear frame (end of run) clears the highlight. Frames without a
- * file (single-file graph editor runs) default to the editor buffer.
+ * info; a clear frame (end of run) clears the highlight.
  */
 export function currentPosAt(frames: Frame[], count: number): SourcePos | null {
   for (let i = Math.min(count, frames.length) - 1; i >= 0; i--) {
     const frame = frames[i];
     if (frame.kind === "clear") return null;
-    if (frame.kind === "line") {
-      return { file: frame.file ?? "algorithm.py", line: frame.line };
-    }
-    if (typeof frame.line === "number") {
-      return { file: frame.file ?? "algorithm.py", line: frame.line };
-    }
+    const pos = framePos(frame);
+    if (pos) return pos;
   }
   return null;
 }

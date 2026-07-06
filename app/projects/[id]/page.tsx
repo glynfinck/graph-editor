@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { ProjectWorkspace } from "@/components/projects/project-workspace";
 import { getProjectWorkspace } from "@/lib/data/projects";
@@ -20,6 +20,9 @@ export default async function ProjectPage({
 
   const { user, project, files, graphs, pinnedGraphIds, forkedFrom } =
     await getProjectWorkspace(id);
+  // anonymous visitors (user null) can't open a real project — send them to the
+  // demo; a signed-in non-owner still gets a genuine notFound
+  if (!user) redirect("/projects/demo");
   if (!project) notFound();
 
   return (

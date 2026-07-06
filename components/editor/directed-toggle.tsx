@@ -3,6 +3,7 @@
 import { MoveRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Tip } from "@/components/ui/tip";
 import { useEditorStore } from "@/lib/editor/store";
 
 /**
@@ -14,20 +15,20 @@ export function DirectedToggle() {
   const directed = useEditorStore((s) => s.directed);
   const setDirected = useEditorStore((s) => s.setDirected);
 
+  const label = directed
+    ? "Directed graph — click to make undirected"
+    : "Undirected graph — click to make directed";
   return (
-    <Button
-      variant={directed ? "secondary" : "ghost"}
-      size="icon-sm"
-      aria-label={
-        directed
-          ? "Directed graph — click to make undirected"
-          : "Undirected graph — click to make directed"
-      }
-      aria-pressed={directed}
-      title={directed ? "Directed" : "Undirected"}
-      onClick={() => setDirected(!directed)}
-    >
-      <MoveRight />
-    </Button>
+    <Tip label={label}>
+      <Button
+        variant={directed ? "secondary" : "ghost"}
+        size="icon-sm"
+        aria-label={label}
+        aria-pressed={directed}
+        onClick={() => setDirected(!directed)}
+      >
+        <MoveRight />
+      </Button>
+    </Tip>
   );
 }

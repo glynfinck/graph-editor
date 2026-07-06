@@ -24,6 +24,7 @@ import {
   createEdgeLabel,
   createNodeLabel,
   edgeLabelString,
+  nodeLabelOffsetY,
 } from "@/lib/editor/pixi/labels";
 import type { GraphFlowEdge, GraphFlowNode } from "@/lib/editor/store";
 
@@ -86,8 +87,7 @@ export function createObjectScene(opts: {
 
   const placeNode = (o: NodeObj, x: number, y: number) => {
     o.circle.position.set(x, y);
-    // short names sit inside the circle, longer ones hang below as a caption
-    o.label.position.set(x, o.name.length <= 4 ? y : y + R + 12);
+    o.label.position.set(x, y + nodeLabelOffsetY(o.name));
   };
 
   const drawEdge = (o: EdgeObj) => {

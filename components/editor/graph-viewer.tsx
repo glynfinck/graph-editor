@@ -3,15 +3,14 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { ArrowLeft, Copy, Loader2, Lock, Save, Sparkles } from "lucide-react";
+import { useEffect, useTransition } from "react";
+import { ArrowLeft, Copy, Loader2, Lock, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { DirectedToggle } from "@/components/editor/directed-toggle";
-import { GraphCanvas } from "@/components/editor/graph-canvas";
 
-// EXPERIMENT: WebGL renderer, client-only (needs the DOM/WebGL), lazy-loaded so
-// pixi.js stays out of the bundle until you flip to it.
+// WebGL (Pixi) renderer, client-only (needs the DOM/WebGL), lazy-loaded so
+// pixi.js is code-split out of the initial bundle.
 const PixiGraphCanvas = dynamic(
   () => import("@/components/editor/pixi-graph-canvas"),
   { ssr: false },
@@ -57,7 +56,6 @@ export function GraphViewer({
   const router = useRouter();
   const [copying, startCopying] = useTransition();
   const [saving, startSaving] = useTransition();
-  const [pixi, setPixi] = useState(false); // EXPERIMENT: React Flow ↔ Pixi
 
   const init = useEditorStore((s) => s.init);
   const name = useEditorStore((s) => s.name);
@@ -114,7 +112,7 @@ export function GraphViewer({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <Button variant="ghost" size="icon-sm" aria-label="All graphs" asChild>
-          <Link href="/graphs">
+          <Link href="/library?tab=graphs">
             <ArrowLeft />
           </Link>
         </Button>
@@ -152,17 +150,6 @@ export function GraphViewer({
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          {/* EXPERIMENT: flip the renderer to compare performance */}
-          <Button
-            size="sm"
-            variant={pixi ? "secondary" : "ghost"}
-            aria-pressed={pixi}
-            title="Toggle the experimental WebGL (Pixi) renderer"
-            onClick={() => setPixi((v) => !v)}
-          >
-            <Sparkles />
-            {pixi ? "Pixi" : "React Flow"}
-          </Button>
           {canEdit && <DirectedToggle />}
           <Button
             size="sm"
@@ -189,11 +176,7 @@ export function GraphViewer({
       </div>
 
       <div className="min-h-0 flex-1">
-        {pixi ? (
-          <PixiGraphCanvas editable={canEdit} />
-        ) : (
-          <GraphCanvas editable={canEdit} showPlayback={false} />
-        )}
+        <PixiGraphCanvas editable={canEdit} />
       </div>
     </div>
   );

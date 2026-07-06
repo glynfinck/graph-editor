@@ -28,11 +28,14 @@ export function useMonacoLineHighlight({
   editorRef,
   monacoRef,
   line,
+  reveal = true,
   modelVersion = 0,
 }: {
   editorRef: RefObject<MonacoEditor | null>;
   monacoRef: RefObject<Monaco | null>;
   line: number | null;
+  /** auto-scroll to keep the line in view (off = highlight only) */
+  reveal?: boolean;
   modelVersion?: number;
 }) {
   const highlightRef = useRef<{ model: TextModel; ids: string[] } | null>(null);
@@ -67,9 +70,63 @@ export function useMonacoLineHighlight({
       ],
     );
     highlightRef.current = { model, ids };
-    editor.revealLineInCenterIfOutsideViewport(
-      line,
-      monacoRef.current?.editor.ScrollType.Smooth,
+    if (reveal) {
+      editor.revealLineInCenterIfOutsideViewport(
+        line,
+        monacoRef.current?.editor.ScrollType.Smooth,
+      );
+    }
+  }, [editorRef, monacoRef, line, reveal, modelVersion]);
+}
+
+/**
+ * Breakpoint dots in the editor's glyph margin, mirroring the store's
+ * `breakpoints[file]`. Same model-ownership rules as the line highlight.
+ * Line numbers are best-effort against edits: they mark playback positions
+ * in the last run's source, not live debugger breakpoints.
+ */
+export function useMonacoBreakpoints({
+  editorRef,
+  file,
+  modelVersion = 0,
+}: {
+  editorRef: RefObject<MonacoEditor | null>;
+  file: string | null;
+  modelVersion?: number;
+}) {
+  const decorationsRef = useRef<{ model: TextModel; ids: string[] } | null>(
+    null,
+  );
+  const lines = useEditorStore((s) =>
+    file ? s.breakpoints[file] : undefined,
+  );
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const previous = decorationsRef.current;
+    if (previous && !previous.model.isDisposed()) {
+      previous.model.deltaDecorations(previous.ids, []);
+    }
+    decorationsRef.current = null;
+
+    const model = editor.getModel();
+    if (!model || !lines?.length) return;
+    const lineCount = model.getLineCount();
+    const ids = model.deltaDecorations(
+      [],
+      lines
+        .filter((line) => line <= lineCount)
+        .map((line) => ({
+          range: {
+            startLineNumber: line,
+            startColumn: 1,
+            endLineNumber: line,
+            endColumn: 1,
+          },
+          options: { glyphMarginClassName: "bp-glyph" },
+        })),
     );
-  }, [editorRef, monacoRef, line, modelVersion]);
+    decorationsRef.current = { model, ids };
+  }, [editorRef, lines, modelVersion]);
 }

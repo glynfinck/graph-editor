@@ -91,6 +91,7 @@ export async function createProject(input: {
   }
 
   revalidatePath("/projects");
+  revalidatePath("/library");
   revalidatePath("/");
   return { ok: true, id: data.id };
 }
@@ -198,6 +199,38 @@ export async function saveProject(
   }
 
   revalidatePath("/projects");
+  revalidatePath("/library");
+  revalidatePath("/");
+  revalidatePath(`/projects/${id}`);
+  return { ok: true, id };
+}
+
+/** Metadata-only rename — files, pins and the active graph are untouched. */
+export async function renameProject(
+  id: string,
+  name: string,
+): Promise<ActionResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { ok: false, error: "Sign in first." };
+
+  const parsed = metaSchema.shape.name.safeParse(name);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  // RLS restricts the update to the caller's own projects.
+  const { data, error } = await supabase
+    .from("projects")
+    .update({ name: parsed.data })
+    .eq("id", id)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data?.length) {
+    return { ok: false, error: "You can't edit this project." };
+  }
+
+  revalidatePath("/projects");
+  revalidatePath("/library");
   revalidatePath("/");
   revalidatePath(`/projects/${id}`);
   return { ok: true, id };
@@ -218,6 +251,7 @@ export async function deleteProject(id: string): Promise<ActionResult> {
   }
 
   revalidatePath("/projects");
+  revalidatePath("/library");
   revalidatePath("/");
   return { ok: true };
 }

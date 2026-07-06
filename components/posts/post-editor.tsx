@@ -7,6 +7,7 @@ import { Globe, Loader2, Save, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PostBody } from "@/components/posts/post-body";
+import { TagPicker } from "@/components/site/tag-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,6 +47,7 @@ export function PostEditor({
     body: string;
     project_id: string | null;
     is_published: boolean;
+    tags: string[];
   } | null;
   ownProjects: { id: string; name: string }[];
 }) {
@@ -58,8 +60,9 @@ export function PostEditor({
   const [projectId, setProjectId] = useState<string | null>(
     post?.project_id ?? null,
   );
+  const [tags, setTags] = useState<string[]>(post?.tags ?? []);
 
-  const payload = { title, body, projectId };
+  const payload = { title, body, projectId, tags };
 
   function saveDraft() {
     startTransition(async () => {
@@ -116,7 +119,7 @@ export function PostEditor({
       const result = await deletePost(post.id);
       if (result.ok) {
         toast.success("Post deleted");
-        router.push("/posts");
+        router.push("/library?tab=posts");
       } else {
         toast.error(result.error);
         setConfirmDelete(false);
@@ -158,6 +161,14 @@ export function PostEditor({
         <p className="text-xs text-muted-foreground">
           Publishing makes the attached project and its pinned graphs public so
           readers can browse and fork them.
+        </p>
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label>Topics</Label>
+        <TagPicker value={tags} onChange={setTags} />
+        <p className="text-xs text-muted-foreground">
+          Topics help readers find this post when filtering Explore.
         </p>
       </div>
 

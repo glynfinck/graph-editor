@@ -27,6 +27,8 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -90,6 +92,8 @@
   --accent: oklch(0.928 0.018 130);
   --accent-foreground: oklch(0.32 0.02 60);
   --destructive: oklch(0.6 0.17 25);
+  --warning: oklch(0.87 0.11 83);
+  --warning-foreground: oklch(0.4 0.07 55);
   --border: oklch(0.895 0.014 85);
   --input: oklch(0.885 0.014 85);
   --ring: oklch(0.6 0.08 150);
@@ -135,6 +139,8 @@
   --accent: oklch(0.32 0.018 110);
   --accent-foreground: oklch(0.93 0.012 85);
   --destructive: oklch(0.7 0.19 22);
+  --warning: oklch(0.48 0.09 78);
+  --warning-foreground: oklch(0.94 0.05 90);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.72 0.07 150);
@@ -411,45 +417,6 @@
 }
 
 /* ---------------------------------------------------------------------------
- * React Flow — pin the canvas chrome to the design tokens
- * ------------------------------------------------------------------------- */
-.react-flow {
-  --xy-background-color: var(--background);
-  --xy-edge-stroke: var(--graph-edge);
-  --xy-edge-stroke-selected: var(--brand);
-  --xy-attribution-background-color: transparent;
-  --xy-controls-button-background-color: var(--card);
-  --xy-controls-button-background-color-hover: var(--accent);
-  --xy-controls-button-color: var(--muted-foreground);
-  --xy-controls-button-color-hover: var(--foreground);
-  --xy-controls-button-border-color: var(--border);
-  --xy-minimap-background-color: var(--card);
-  --xy-minimap-mask-background-color: color-mix(
-    in oklch,
-    var(--background) 55%,
-    transparent
-  );
-  --xy-minimap-node-background-color: var(--muted-foreground);
-  --xy-handle-background-color: var(--muted-foreground);
-  --xy-handle-border-color: var(--background);
-  --xy-selection-background-color: color-mix(
-    in oklch,
-    var(--brand) 8%,
-    transparent
-  );
-  --xy-selection-border: 1px solid
-    color-mix(in oklch, var(--brand) 60%, transparent);
-}
-
-.react-flow__controls {
-  @apply overflow-hidden rounded-xl border shadow-none;
-}
-
-.react-flow__attribution {
-  @apply text-muted-foreground/50;
-}
-
-/* ---------------------------------------------------------------------------
  * Terminal — the console renders as a unix terminal: always dark, but tinted
  * with the active palette's hues (brand for the surface, the canvas cursor
  * color for the prompt). See console-panel.tsx.
@@ -467,32 +434,6 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Canvas node — the rim ring pulses while hovering an editable node, hinting
- * you can drag from the rim to connect an edge (see components/editor/
- * graph-node.tsx). Motion is a discoverability cue, so it's disabled under
- * prefers-reduced-motion.
- * ------------------------------------------------------------------------- */
-@keyframes node-connect-hint {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.08);
-  }
-}
-
-.group:hover .node-connect-ring {
-  animation: node-connect-hint 1.5s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .node-connect-ring {
-    animation: none !important;
-  }
-}
-
-/* ---------------------------------------------------------------------------
  * Monaco — the line the running algorithm is on, tinted to match the canvas
  * cursor color (see lib/editor/use-monaco-line-highlight.ts)
  * ------------------------------------------------------------------------- */
@@ -502,6 +443,16 @@
 
 .algo-line-highlight-gutter {
   border-left: 3px solid var(--graph-current);
+}
+
+/* playback breakpoint dot in the glyph margin (see useMonacoBreakpoints) */
+.bp-glyph {
+  cursor: pointer;
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--destructive) 0 4px,
+    transparent 5px
+  );
 }
 
 /* ---------------------------------------------------------------------------

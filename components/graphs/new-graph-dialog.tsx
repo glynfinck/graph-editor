@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
+import { TagPicker } from "@/components/site/tag-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,18 +22,29 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { createGraph } from "@/lib/actions/graphs";
 
-export function NewGraphDialog() {
+export function NewGraphDialog({
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  /** controlled mode (no trigger button), e.g. from the navbar "+ New" menu */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+} = {}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [directed, setDirected] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     startTransition(async () => {
-      const result = await createGraph({ name, description, directed });
+      const result = await createGraph({ name, description, directed, tags });
       if (result.ok && result.id) {
         setOpen(false);
         router.push(`/graphs/${result.id}`);
@@ -44,11 +56,13 @@ export function NewGraphDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus /> New graph
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button>
+            <Plus /> New graph
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
@@ -90,6 +104,10 @@ export function NewGraphDialog() {
               checked={directed}
               onCheckedChange={setDirected}
             />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Topics (optional)</Label>
+            <TagPicker value={tags} onChange={setTags} />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={pending || !name.trim()}>

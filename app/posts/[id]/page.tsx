@@ -8,6 +8,7 @@ import { CommentsSection } from "@/components/posts/comments-section";
 import { OpenPostInProjectButton } from "@/components/posts/open-post-in-project-button";
 import { PostBody } from "@/components/posts/post-body";
 import { PostLikeButton } from "@/components/posts/post-like-button";
+import { TagBadges } from "@/components/site/tag-badges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export default async function PostPage({
     <div className="mx-auto w-full max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between gap-4">
         <Button variant="ghost" size="sm" className="-ml-2" asChild>
-          <Link href="/posts">
+          <Link href="/explore?type=posts">
             <ArrowLeft /> All posts
           </Link>
         </Button>
@@ -86,6 +87,7 @@ export default async function PostPage({
         </span>
         {post.is_official && <Badge variant="secondary">Official</Badge>}
         {!post.is_published && <Badge variant="outline">Draft</Badge>}
+        {post.tags.length > 0 && <TagBadges tags={post.tags} max={4} />}
         <span>{formatRelativeTime(post.published_at ?? post.updated_at)}</span>
         <PostLikeButton
           postId={post.id}

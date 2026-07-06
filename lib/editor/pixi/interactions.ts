@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import type { ObjectScene } from "@/lib/editor/pixi/base-objects";
 import { R, type Pt } from "@/lib/editor/pixi/geometry";
+import { zoomAtPointer } from "@/lib/editor/pixi/stage";
 import { useEditorStore } from "@/lib/editor/store";
 import { MAX_EDGES, MAX_NODES } from "@/lib/graph/types";
 
@@ -55,6 +56,8 @@ export function attachInteractions(opts: {
   redraw: () => void;
   /** redraw the selection layer (so a ring follows a dragged node) */
   refreshSelection: () => void;
+  /** repaint playback decorations at live positions (so they follow a drag) */
+  refreshOverlay: () => void;
 }): () => void {
   const {
     container,
@@ -67,6 +70,7 @@ export function attachInteractions(opts: {
     screenToWorld,
     redraw,
     refreshSelection,
+    refreshOverlay,
   } = opts;
 
   let pending: Pending | null = null;
@@ -220,11 +224,12 @@ export function attachInteractions(opts: {
       const w = screenToWorld(ev.clientX, ev.clientY);
       const x = w.x + pending.offx;
       const y = w.y + pending.offy;
+      // move imperatively for live feedback; the store write is deferred to
+      // pointer-up so a drag never re-renders React (structureSig, the label
+      // pass, and the selection memos all key off the nodes array reference)
       scene.moveNode(pending.id, x, y);
       refreshSelection();
-      useEditorStore.getState().onNodesChange([
-        { id: pending.id, type: "position", position: { x, y }, dragging: true },
-      ]);
+      refreshOverlay(); // keep any playback decorations glued to the node
     } else if (active === "connect" && pending.kind === "connect") {
       drawConnect(pending.id, screenToWorld(ev.clientX, ev.clientY));
     }
@@ -279,23 +284,17 @@ export function attachInteractions(opts: {
       toast.error(`Graphs are limited to ${MAX_NODES.toLocaleString()} nodes.`);
       return;
     }
-    store.addNodeAt(w.x - R, w.y - R); // addNodeAt takes the top-left corner
+    // the Pixi scene renders a node's stored position as the circle CENTER
+    // (base-objects placeNode), so drop the node's center on the cursor — no
+    // top-left correction like React Flow's box model needed
+    store.addNodeAt(w.x, w.y);
   };
 
   const onWheel = (ev: WheelEvent) => {
     ev.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const mx = ev.clientX - rect.left;
-    const my = ev.clientY - rect.top;
-    let dy = ev.deltaY;
-    if (ev.deltaMode === 1) dy *= 16;
-    else if (ev.deltaMode === 2) dy *= 100;
-    const factor = Math.min(1.2, Math.max(0.83, Math.exp(-dy * 0.0012)));
-    const next = Math.max(0.02, Math.min(8, world.scale.x * factor));
-    const wx = (mx - world.position.x) / world.scale.x;
-    const wy = (my - world.position.y) / world.scale.y;
-    world.scale.set(next);
-    world.position.set(mx - wx * next, my - wy * next);
+    zoomAtPointer(world, canvas, ev);
+    // world children (selection, overlay) scale with the zoom automatically;
+    // only the stage-space grid and the hover ring need a manual repaint
     redraw();
     refreshSelection();
     drawHover();
@@ -309,12 +308,12 @@ export function attachInteractions(opts: {
     if (!active) clearHover();
   };
 
-  // Delete/Backspace removes the selection — only while the canvas is the user's
-  // focus (hovering), and never while typing in an input (inspector fields, or
-  // Monaco / the terminal in the workspace).
+  // Delete/Backspace removes the selection. Gated only on NOT typing in an
+  // input (inspector fields, or Monaco / the terminal in the workspace) — not
+  // on hover, so a selection stays deletable once the pointer leaves the canvas
+  // (e.g. moving toward the inspector) and keyboard-only users can delete too.
   const onKey = (ev: KeyboardEvent) => {
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
-    if (!hovering) return;
     const ae = document.activeElement as HTMLElement | null;
     if (
       ae &&

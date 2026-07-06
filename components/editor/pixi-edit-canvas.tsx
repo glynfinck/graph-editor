@@ -1,20 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Application, Container, Graphics } from "pixi.js";
 
 import { EdgeInspector } from "@/components/editor/edge-inspector";
 import { NodeInspector } from "@/components/editor/node-inspector";
+import {
+  PixiCanvasControls,
+  type PixiViewControls,
+} from "@/components/editor/pixi-canvas-controls";
 import { PlaybackControls } from "@/components/editor/playback-controls";
 import { createObjectScene, type ObjectScene } from "@/lib/editor/pixi/base-objects";
 import { resolvePalette } from "@/lib/editor/pixi/colors";
-import { arrowheadPoly, fitBounds, R, trimmedEnds } from "@/lib/editor/pixi/geometry";
+import { arrowheadPoly, R, trimmedEnds } from "@/lib/editor/pixi/geometry";
 import { drawGrid } from "@/lib/editor/pixi/grid";
 import { attachInteractions } from "@/lib/editor/pixi/interactions";
 import {
   createPlaybackOverlay,
   type PlaybackOverlay,
 } from "@/lib/editor/pixi/playback-overlay";
+import {
+  fitView,
+  useThemeVersion,
+  zoomStep,
+} from "@/lib/editor/pixi/stage";
 import { useEditorStore } from "@/lib/editor/store";
 
 /** Handles the edit canvas keeps across renders for the imperative effects. */
@@ -31,8 +40,9 @@ type EditScene = {
  * drag or add never tears down the WebGL context or refits the viewport. Full
  * rebuild happens only on graph switch, direction toggle, or theme change.
  *
- * Phase B: renders + reconciles + plays back. Pointer editing (drag / connect /
- * select / delete) is layered on in later phases; for now the pointer pans.
+ * Pointer editing (pan / drag / rim-connect / select / double-click add /
+ * delete) lives in attachInteractions; playback decoration in the shared
+ * overlay. Shares the stage/geometry helpers with the read-only view canvas.
  */
 export default function PixiEditCanvas({
   showPlayback = false,
@@ -49,6 +59,7 @@ export default function PixiEditCanvas({
 
   const viewRef = useRef<{ scale: number; x: number; y: number } | null>(null);
   const sceneRef = useRef<EditScene | null>(null);
+  const controlsRef = useRef<PixiViewControls | null>(null);
   // last graph id the build effect saw, to decide fit (new graph) vs. preserve
   // view (theme rebuild)
   const lastGraphRef = useRef<string | null>(null);
@@ -73,19 +84,8 @@ export default function PixiEditCanvas({
     return sel.length === 1 ? sel[0].id : null;
   }, [edges]);
 
-  const [themeVersion, setThemeVersion] = useState(0);
-  useEffect(() => {
-    // Watch ONLY the theme/palette signals (next-themes sets `class`, the
-    // palette sets `data-palette` — both on <html>). NOT `style`: unrelated
-    // inline-style churn (Radix scroll-locks, resizable-panel drags, toasts)
-    // would otherwise tear down and rebuild the whole app mid-edit.
-    const obs = new MutationObserver(() => setThemeVersion((v) => v + 1));
-    obs.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class", "data-palette"],
-    });
-    return () => obs.disconnect();
-  }, []);
+  // rebuild the scene with fresh colors on a theme/palette change
+  const themeVersion = useThemeVersion();
 
   // Build (or rebuild) the whole scene. Keyed only on graph identity, direction,
   // and theme — NOT on node/edge arrays — so edits never rebuild.
@@ -211,18 +211,8 @@ export default function PixiEditCanvas({
       };
 
       const fit = () => {
-        const b = fitBounds(useEditorStore.getState().nodes);
-        if (!app || !b) return;
-        const gw = b.maxX - b.minX || 1;
-        const gh = b.maxY - b.minY || 1;
-        const scale =
-          Math.min(app.screen.width / gw, app.screen.height / gh) * 0.9;
-        world.scale.set(scale);
-        world.position.set(
-          app.screen.width / 2 - ((b.minX + b.maxX) / 2) * scale,
-          app.screen.height / 2 - ((b.minY + b.maxY) / 2) * scale,
-        );
-        redraw();
+        if (!app) return;
+        fitView(app.screen, world, useEditorStore.getState().nodes);
       };
 
       // populate from the live store snapshot
@@ -240,7 +230,27 @@ export default function PixiEditCanvas({
         screenToWorld,
         redraw,
         refreshSelection: drawSelection,
+        refreshOverlay: () => overlay.refresh(),
       });
+
+      // selection + overlay are children of `world`, so they scale with the
+      // zoom/fit automatically — only the stage-space grid needs a redraw
+      controlsRef.current = {
+        zoomIn: () => {
+          if (!app) return;
+          zoomStep(world, app.screen, "in");
+          redraw();
+        },
+        zoomOut: () => {
+          if (!app) return;
+          zoomStep(world, app.screen, "out");
+          redraw();
+        },
+        fit: () => {
+          fit();
+          redraw();
+        },
+      };
 
       // restore the prior view on a theme rebuild; fit on a new graph
       if (!refit && viewRef.current) {
@@ -249,10 +259,11 @@ export default function PixiEditCanvas({
         redraw();
       } else {
         fit();
+        redraw();
       }
       const settle = window.setTimeout(() => {
         if (refit) fit();
-        else redraw();
+        redraw();
       }, 80);
 
       sceneRef.current = { scene, overlay, redraw, drawSelection };
@@ -263,6 +274,7 @@ export default function PixiEditCanvas({
         window.clearTimeout(settle);
         resizeObs.disconnect();
         sceneRef.current = null;
+        controlsRef.current = null;
         detachInput();
         overlay.destroy();
       };
@@ -284,6 +296,9 @@ export default function PixiEditCanvas({
     // structureSig (in deps) is the trigger; reconcile reads live store state
     const s = useEditorStore.getState();
     sceneRef.current?.scene.reconcile(s.nodes, s.edges);
+    // reconcile moved/removed nodes → keep decorations glued to live positions
+    // (removed nodes' ghosts drop out since their position lookup is now empty)
+    sceneRef.current?.overlay.refresh();
   }, [structureSig]);
 
   // drive playback: fold new frames into the overlay
@@ -316,6 +331,7 @@ export default function PixiEditCanvas({
           </div>
         </div>
       )}
+      <PixiCanvasControls controlsRef={controlsRef} />
       {selectedNodeId ? (
         <div className="absolute top-2 right-2 z-10">
           <NodeInspector nodeId={selectedNodeId} />

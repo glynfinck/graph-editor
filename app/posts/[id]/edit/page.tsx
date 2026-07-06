@@ -37,6 +37,7 @@ export default async function EditPostPage({
             body: post.body,
             project_id: post.project_id,
             is_published: post.is_published,
+            tags: post.tags,
           }}
           ownProjects={projects.map((project) => ({
             id: project.id,

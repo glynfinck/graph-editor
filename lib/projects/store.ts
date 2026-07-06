@@ -21,6 +21,8 @@ type ProjectState = {
     activeGraphId: string | null;
     graphIds: string[];
     files: { path: string; content: string }[];
+    /** file to open on load; falls back to preferredOpen when absent/missing */
+    openPath?: string;
   }) => void;
   setName: (name: string) => void;
   openFile: (path: string) => void;
@@ -66,7 +68,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       activeGraphId: project.activeGraphId,
       graphIds: project.graphIds,
       files,
-      openPath: preferredOpen(files),
+      openPath:
+        project.openPath && project.openPath in files
+          ? project.openPath
+          : preferredOpen(files),
       dirty: false,
     });
   },

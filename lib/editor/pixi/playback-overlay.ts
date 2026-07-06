@@ -28,6 +28,10 @@ const EDGE_CHUNK = 600;
 
 export type PlaybackOverlay = {
   decorate: (frames: Frame[], playhead: number) => void;
+  /** repaint every decoration at current node/edge positions — call after a
+   * drag or structural edit moves/removes a decorated element, since the
+   * append-only painters bake absolute coordinates at promotion time */
+  refresh: () => void;
   destroy: () => void;
 };
 
@@ -253,6 +257,10 @@ export function createPlaybackOverlay(opts: {
 
   return {
     decorate,
+    // re-fold nothing, just repaint the current state at live positions
+    // (drawNode/drawEdge read nodePos/edgeRec fresh, and a removed element's
+    // lookup returns undefined so its ghost drops out)
+    refresh: () => repaintAll(vs),
     destroy: () => {
       ticker.remove(animateDashes);
       overlay.destroy({ children: true });

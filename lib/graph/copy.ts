@@ -64,8 +64,19 @@ export async function copyGraph(
     .single();
   if (error) return { error: error.message };
 
-  // page the source doc in (a big graph exceeds a single request's row cap)
-  const doc = await getGraphDoc(supabase, sourceId);
+  // page the source doc in (a big graph exceeds a single request's row cap).
+  // getGraphDoc throws on a failed page fetch — catch it so the shell insert
+  // above is cleaned up and the {id}|{error} contract holds for callers.
+  let doc: GraphDoc;
+  try {
+    doc = await getGraphDoc(supabase, sourceId);
+  } catch (error) {
+    await supabase.from("graphs").delete().eq("id", data.id);
+    return {
+      error:
+        error instanceof Error ? error.message : "Couldn't copy the graph.",
+    };
+  }
   const docError = await replaceDoc(supabase, data.id, docToJson(doc));
   if (docError) {
     await supabase.from("graphs").delete().eq("id", data.id);

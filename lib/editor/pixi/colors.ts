@@ -75,8 +75,8 @@ export function mix(a: number, b: number, t: number): number {
   return (r << 16) | (g << 8) | bl;
 }
 
-/** The full graph palette resolved from CSS vars (mirrors graph-node.tsx /
- * graph-decoration.ts), shared by both render paths. */
+/** The full graph palette resolved from CSS vars, shared by the edit and view
+ * Pixi canvases. */
 export type GraphPalette = {
   bg: number;
   node: number;

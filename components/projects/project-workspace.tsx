@@ -18,8 +18,8 @@ import {
   PinOff,
   Play,
   Plus,
+  RotateCcw,
   Save,
-  Sparkles,
   Square,
   SquareTerminal,
   Waypoints,
@@ -29,10 +29,9 @@ import { toast } from "sonner";
 
 import { ConsolePanel } from "@/components/editor/console-panel";
 import { DirectedToggle } from "@/components/editor/directed-toggle";
-import { GraphCanvas } from "@/components/editor/graph-canvas";
 
-// EXPERIMENT: WebGL renderer, client-only (needs the DOM/WebGL), lazy-loaded so
-// pixi.js stays out of the bundle until you flip to it.
+// WebGL (Pixi) renderer, client-only (needs the DOM/WebGL), lazy-loaded so
+// pixi.js is code-split out of the initial bundle.
 const PixiGraphCanvas = dynamic(
   () => import("@/components/editor/pixi-graph-canvas"),
   { ssr: false },
@@ -54,6 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DemoBanner } from "@/components/projects/demo-banner";
 import { FileTree } from "@/components/projects/file-tree";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tip } from "@/components/ui/tip";
@@ -65,6 +65,7 @@ import {
 } from "@/lib/actions/graphs";
 import { saveProject } from "@/lib/actions/projects";
 import type { GraphSummary } from "@/lib/data/graphs";
+import { EMPTY_GRAPH_DOC, type GraphDoc } from "@/lib/graph/types";
 import {
   applyMonacoAppTheme,
   useMonacoAppTheme,
@@ -102,6 +103,9 @@ export function ProjectWorkspace({
   pinnedGraphIds,
   forkedFrom,
   userId,
+  demo = false,
+  demoGraphDocs,
+  openPath: initialOpenPath,
 }: {
   project: {
     id: string;
@@ -114,12 +118,20 @@ export function ProjectWorkspace({
   pinnedGraphIds: string[];
   forkedFrom: { id: string; title: string } | null;
   userId: string | null;
+  /** anonymous demo: everything runs in-memory, Save routes to sign-in */
+  demo?: boolean;
+  /** graph docs supplied inline so demo mode never calls loadGraphDoc */
+  demoGraphDocs?: Record<string, GraphDoc>;
+  /** file to open on load (demo seeds a specific lesson file) */
+  openPath?: string;
 }) {
   const router = useRouter();
   const [saving, startSaving] = useTransition();
   const [copying, startCopying] = useTransition();
   const [creatingGraph, startCreatingGraph] = useTransition();
-  const [pixi, setPixi] = useState(false); // EXPERIMENT: React Flow ↔ Pixi
+  // id of the graph whose document failed to load, and a counter to retry it
+  const [graphLoadError, setGraphLoadError] = useState<string | null>(null);
+  const [graphLoadRetry, setGraphLoadRetry] = useState(0);
 
   const initProject = useProjectStore((s) => s.init);
   const name = useProjectStore((s) => s.name);
@@ -148,12 +160,6 @@ export function ProjectWorkspace({
   const editorRef = useRef<MonacoEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const [modelVersion, setModelVersion] = useState(0);
-  // gutter clicks land in a mount-time listener; keep the open file current
-  // (updated in an effect — ref writes during render trip react-hooks/refs)
-  const openPathRef = useRef(openPath);
-  useEffect(() => {
-    openPathRef.current = openPath;
-  }, [openPath]);
 
   // the editor holds the id of whichever graph's document is currently live.
   // The active graph's doc is fetched on demand (the picker only carries
@@ -176,6 +182,7 @@ export function ProjectWorkspace({
       activeGraphId: project.active_graph_id,
       graphIds: pinnedGraphIds,
       files: initialFiles,
+      openPath: initialOpenPath,
     });
     // reset only when opening a different project
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,8 +210,10 @@ export function ProjectWorkspace({
       graphs.filter((graph) => graph.is_sample && !graphIds.includes(graph.id)),
     [graphs, graphIds],
   );
-  const canEditGraph =
-    !!activeGraph && !!userId && activeGraph.owner_id === userId;
+  // demo graphs are editable in-memory even without an account
+  const canEditGraph = demo
+    ? !!activeGraph
+    : !!activeGraph && !!userId && activeGraph.owner_id === userId;
   // a graph is selected but its document hasn't been paged in yet
   const graphLoading = !!activeGraphId && editorGraphId !== activeGraphId;
 
@@ -258,10 +267,24 @@ export function ProjectWorkspace({
     const summary = graphs.find((graph) => graph.id === activeGraphId);
     if (!summary) return;
 
+    // demo mode carries every graph's doc inline — no server round-trip, and
+    // no load can fail, so graphLoadError stays null on its own
+    if (demo) {
+      initEditor(
+        summary.id,
+        summary.name,
+        summary.description,
+        summary.directed,
+        demoGraphDocs?.[activeGraphId] ?? EMPTY_GRAPH_DOC,
+      );
+      return;
+    }
+
     let cancelled = false;
     loadGraphDoc(activeGraphId).then((result) => {
       if (cancelled) return;
       if (result.ok) {
+        setGraphLoadError(null);
         initEditor(
           summary.id,
           summary.name,
@@ -270,18 +293,18 @@ export function ProjectWorkspace({
           result.doc,
         );
       } else {
+        // Don't init the editor with the failed graph's id: that would both
+        // block the refetch (the guard above) and mount an editable EMPTY
+        // canvas whose Save would overwrite the real document. Show an error
+        // panel instead; the Retry button re-runs this effect.
         toast.error(result.error);
-        // clear the skeleton with an empty canvas; reselecting retries
-        initEditor(summary.id, summary.name, summary.description, summary.directed, {
-          nodes: [],
-          edges: [],
-        });
+        setGraphLoadError(summary.id);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [activeGraphId, graphs, initEditor, stop]);
+  }, [activeGraphId, graphs, initEditor, stop, graphLoadRetry, demo, demoGraphDocs]);
 
   const canRun =
     status === "ready" &&
@@ -354,6 +377,11 @@ export function ProjectWorkspace({
   // one save for the whole surface: the project files always, the test
   // graph's document too when it's the caller's to write
   function saveAll() {
+    // demo has nothing to persist to — saving is the nudge to sign in
+    if (demo) {
+      router.push("/login?next=/projects");
+      return;
+    }
     if (saving) return;
     const projectState = useProjectStore.getState();
     const editor = useEditorStore.getState();
@@ -387,7 +415,7 @@ export function ProjectWorkspace({
   }
 
   useSaveShortcut(saveAll);
-  useUnsavedGuard(dirty || graphDirty);
+  useUnsavedGuard(!demo && (dirty || graphDirty));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -399,7 +427,7 @@ export function ProjectWorkspace({
             aria-label="All projects"
             asChild
           >
-            <Link href="/projects">
+            <Link href="/library?tab=projects">
               <ArrowLeft />
             </Link>
           </Button>
@@ -513,21 +541,6 @@ export function ProjectWorkspace({
               </Button>
             </Tip>
           )}
-          {activeGraph && (
-            // EXPERIMENT: flip the renderer to compare performance (view-only)
-            <Tip label="Toggle the experimental WebGL (Pixi) renderer">
-              <Button
-                size="sm"
-                variant={pixi ? "secondary" : "ghost"}
-                aria-pressed={pixi}
-                onClick={() => setPixi((v) => !v)}
-              >
-                <Sparkles />
-                {pixi ? "Pixi" : "React Flow"}
-              </Button>
-            </Tip>
-          )}
-
           <div className="flex items-center">
             <Tip label="Toggle the file tree">
               <Button
@@ -571,13 +584,17 @@ export function ProjectWorkspace({
           <Button
             size="sm"
             onClick={saveAll}
-            disabled={(!dirty && !(canEditGraph && graphDirty)) || saving}
+            disabled={
+              demo ? false : (!dirty && !(canEditGraph && graphDirty)) || saving
+            }
           >
             {saving ? <Loader2 className="animate-spin" /> : <Save />}
             Save
           </Button>
         </div>
       </div>
+
+      {demo && <DemoBanner />}
 
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
@@ -675,7 +692,8 @@ export function ProjectWorkspace({
                       )
                         return;
                       const line = e.target.position?.lineNumber;
-                      const path = openPathRef.current;
+                      // mount-time listener: read the open file from the store
+                      const path = useProjectStore.getState().openPath;
                       if (line && path) {
                         useEditorStore
                           .getState()
@@ -719,19 +737,27 @@ export function ProjectWorkspace({
         >
           <ResizablePanelGroup orientation="vertical">
             <ResizablePanel defaultSize="62%" minSize="20%">
-              {graphLoading ? (
+              {activeGraphId && graphLoadError === activeGraphId ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                  <span>Couldn’t load this graph’s document.</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setGraphLoadRetry((t) => t + 1)}
+                  >
+                    <RotateCcw />
+                    Retry
+                  </Button>
+                </div>
+              ) : graphLoading ? (
                 <div className="h-full w-full p-3">
                   <Skeleton className="h-full w-full rounded-lg" />
                 </div>
               ) : activeGraph ? (
-                pixi ? (
-                  // EXPERIMENT: WebGL renderer with live playback + editing
-                  <PixiGraphCanvas editable={canEditGraph} showPlayback />
-                ) : (
-                  // canvas edits are runnable immediately; Save persists them
-                  // when the graph is the caller's own
-                  <GraphCanvas editable={canEditGraph} />
-                )
+                // WebGL (Pixi) renderer with live playback + editing; canvas
+                // edits are runnable immediately and Save persists them when
+                // the graph is the caller's own
+                <PixiGraphCanvas editable={canEditGraph} showPlayback />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Waypoints className="size-6" />

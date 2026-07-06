@@ -5,9 +5,10 @@ import { z } from "zod";
 
 import { excerpt } from "@/lib/format";
 import { copyGraph } from "@/lib/graph/copy";
-import { extractEmbedRefs } from "@/lib/posts/embeds";
+import { extractEmbedRefs, firstPythonFence } from "@/lib/posts/embeds";
 import { STARTER_MAIN_PY } from "@/lib/projects/types";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeTags } from "@/lib/tags";
 
 export type ActionResult =
   | { ok: true; id?: string }
@@ -22,6 +23,8 @@ const postSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(160),
   body: z.string().max(50_000),
   projectId: z.string().regex(uuidShape).nullable(),
+  // topic tags from the fixed taxonomy — unknown slugs are dropped on write
+  tags: z.array(z.string()).max(20).default([]),
 });
 
 async function requireUser() {
@@ -58,6 +61,7 @@ export async function createPost(input: {
   title: string;
   body: string;
   projectId: string | null;
+  tags?: string[];
 }): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
   if (!user) return { ok: false, error: "Sign in to write posts." };
@@ -83,18 +87,25 @@ export async function createPost(input: {
       title: parsed.data.title,
       body: parsed.data.body,
       project_id: parsed.data.projectId,
+      tags: sanitizeTags(parsed.data.tags),
     })
     .select("id")
     .single();
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/posts");
+  revalidatePath("/library");
   return { ok: true, id: data.id };
 }
 
 export async function savePost(
   id: string,
-  input: { title: string; body: string; projectId: string | null },
+  input: {
+    title: string;
+    body: string;
+    projectId: string | null;
+    tags?: string[];
+  },
 ): Promise<ActionResult> {
   const { supabase, user } = await requireUser();
   if (!user) return { ok: false, error: "Sign in first." };
@@ -120,6 +131,7 @@ export async function savePost(
       title: parsed.data.title,
       body: parsed.data.body,
       project_id: parsed.data.projectId,
+      tags: sanitizeTags(parsed.data.tags),
     })
     .eq("id", id)
     .select("id");
@@ -127,6 +139,8 @@ export async function savePost(
   if (!data?.length) return { ok: false, error: "You can't edit this post." };
 
   revalidatePath("/posts");
+  revalidatePath("/library");
+  revalidatePath("/explore");
   revalidatePath(`/posts/${id}`);
   return { ok: true, id };
 }
@@ -209,6 +223,7 @@ export async function publishPost(id: string): Promise<ActionResult> {
   if (publishError) return { ok: false, error: publishError.message };
 
   revalidatePath("/posts");
+  revalidatePath("/library");
   revalidatePath(`/posts/${id}`);
   revalidatePath("/explore");
   return { ok: true, id };
@@ -231,6 +246,8 @@ export async function unpublishPost(id: string): Promise<ActionResult> {
   if (!data?.length) return { ok: false, error: "You can't edit this post." };
 
   revalidatePath("/posts");
+  revalidatePath("/library");
+  revalidatePath("/explore");
   revalidatePath(`/posts/${id}`);
   return { ok: true, id };
 }
@@ -248,6 +265,8 @@ export async function deletePost(id: string): Promise<ActionResult> {
   if (!data?.length) return { ok: false, error: "You can't delete this post." };
 
   revalidatePath("/posts");
+  revalidatePath("/library");
+  revalidatePath("/explore");
   return { ok: true };
 }
 
@@ -282,6 +301,7 @@ export async function togglePostLike(
   }
 
   revalidatePath("/posts");
+  revalidatePath("/explore");
   revalidatePath(`/posts/${id}`);
   return { ok: true, id, liked: !existing };
 }
@@ -307,8 +327,7 @@ export async function createProjectFromPost(
   if (postError) return { ok: false, error: postError.message };
   if (!post) return { ok: false, error: "Post not found." };
 
-  const fence = /```python\s*\n([\s\S]*?)```/i.exec(post.body);
-  const mainPy = fence?.[1].trim() ? fence[1] : STARTER_MAIN_PY;
+  const mainPy = firstPythonFence(post.body) ?? STARTER_MAIN_PY;
 
   // first embedded graph the caller can actually see (in body order)
   const { graphIds } = extractEmbedRefs(post.body);

@@ -6,6 +6,16 @@
  */
 import { BitmapText, Container, Graphics } from "pixi.js";
 
+import { R } from "@/lib/editor/pixi/geometry";
+
+/** Vertical offset of a node's label from the node center: 0 for a short name
+ * (sits inside the circle), R+12 for a longer one (hangs below as a caption).
+ * The <=4 threshold matches createNodeLabel's inside/below decision — both
+ * render paths use this so captions place identically. */
+export function nodeLabelOffsetY(name: string): number {
+  return name.length <= 4 ? 0 : R + 12;
+}
+
 const FONT_FAMILY = "ui-sans-serif, system-ui, sans-serif";
 const NODE_FONT = {
   fontFamily: FONT_FAMILY,
@@ -55,8 +65,8 @@ export function createNodeLabel(
   return c;
 }
 
-/** React Flow's edge label: "name · weight", "name", the weight alone, or null
- * when the edge is plain (mirrors floating-edge.tsx `edgeLabel`). */
+/** An edge's label: "name · weight", "name", the weight alone, or null when the
+ * edge is plain (unweighted and unlabeled). */
 export function edgeLabelString(
   weight: number | null | undefined,
   name: string | null | undefined,
