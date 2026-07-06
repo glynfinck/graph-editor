@@ -50,7 +50,7 @@ const FEATURES = [
     color: "text-(--graph-path)",
     title: "Your graphs, saved and private",
     description:
-      "Sign in with GitHub, Google or email. Graphs are stored in Postgres behind row-level security — private by default, shareable when you say so.",
+      "Sign in with GitHub or Google. Graphs are stored in Postgres behind row-level security — private by default, shareable when you say so.",
   },
 ];
 
