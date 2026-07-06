@@ -187,4 +187,4 @@ cp .env.example .env.local   # fill keys from `supabase status`
 npm run dev
 ```
 
-`npm test` runs the unit tests (frame/playback semantics); `npm run test:integration` runs the RLS isolation matrix against the local Supabase. Migrations apply to production from GitHub Actions on push to `main`.
+`npm test` runs the unit tests (frame/playback semantics, graph schema, editor store); `npm run test:integration` runs the RLS isolation matrix against the local Supabase; `npm run test:e2e` runs the Playwright end-to-end suite in a real browser — the signed-out demo workspace (canvas editing, attributes, running a lesson) and the graph Python API. Migrations apply to production from GitHub Actions on push to `main`.
