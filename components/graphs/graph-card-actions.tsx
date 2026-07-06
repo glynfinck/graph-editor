@@ -2,9 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Copy, Loader2, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import {
+  Copy,
+  Globe,
+  Loader2,
+  Lock,
+  MoreVertical,
+  Pencil,
+  Tags,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { TagPicker } from "@/components/site/tag-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,27 +28,42 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { deleteGraph, duplicateGraph, renameGraph } from "@/lib/actions/graphs";
+import {
+  deleteGraph,
+  duplicateGraph,
+  renameGraph,
+  setGraphTags,
+  setGraphVisibility,
+} from "@/lib/actions/graphs";
 
 export function GraphCardActions({
   graphId,
   graphName,
   canDelete,
   signedIn,
+  isPublic,
+  tags,
 }: {
   graphId: string;
   graphName: string;
   /** the caller owns this graph (rename/delete are owner-only) */
   canDelete: boolean;
   signedIn: boolean;
+  /** when provided (owner views), the menu offers a public/private toggle */
+  isPublic?: boolean;
+  /** when provided (owner views), the menu offers tag editing */
+  tags?: string[];
 }) {
   const router = useRouter();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [newName, setNewName] = useState(graphName);
+  const [newTags, setNewTags] = useState<string[]>(tags ?? []);
   const [pending, startTransition] = useTransition();
 
   function duplicate() {
@@ -63,6 +88,35 @@ export function GraphCardActions({
       if (result.ok) {
         setRenameOpen(false);
         toast.success("Graph renamed");
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function toggleVisibility() {
+    startTransition(async () => {
+      const result = await setGraphVisibility(graphId, !isPublic);
+      if (result.ok) {
+        toast.success(
+          isPublic
+            ? "Graph is private again"
+            : "Graph is public — it now shows up in Explore",
+        );
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function saveTags() {
+    startTransition(async () => {
+      const result = await setGraphTags(graphId, newTags);
+      if (result.ok) {
+        setTagsOpen(false);
+        toast.success("Tags updated");
         router.refresh();
       } else {
         toast.error(result.error);
@@ -110,16 +164,67 @@ export function GraphCardActions({
               <Pencil /> Rename
             </DropdownMenuItem>
           )}
-          {canDelete && (
+          {canDelete && tags !== undefined && (
             <DropdownMenuItem
-              variant="destructive"
-              onSelect={() => setConfirmOpen(true)}
+              onSelect={() => {
+                setNewTags(tags);
+                setTagsOpen(true);
+              }}
             >
-              <Trash2 /> Delete
+              <Tags /> Edit tags
             </DropdownMenuItem>
+          )}
+          {canDelete && isPublic !== undefined && (
+            <DropdownMenuItem onSelect={toggleVisibility}>
+              {isPublic ? (
+                <>
+                  <Lock /> Make private
+                </>
+              ) : (
+                <>
+                  <Globe /> Make public
+                </>
+              )}
+            </DropdownMenuItem>
+          )}
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => setConfirmOpen(true)}
+              >
+                <Trash2 /> Delete
+              </DropdownMenuItem>
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={tagsOpen} onOpenChange={setTagsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tags for “{graphName}”</DialogTitle>
+            <DialogDescription>
+              Topics help people find this graph in Explore.
+            </DialogDescription>
+          </DialogHeader>
+          <TagPicker value={newTags} onChange={setNewTags} />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTagsOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveTags} disabled={pending}>
+              {pending && <Loader2 className="animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="sm:max-w-sm">

@@ -151,6 +151,7 @@ export type Database = {
           is_sample: boolean
           name: string
           owner_id: string | null
+          tags: string[]
           updated_at: string
         }
         Insert: {
@@ -162,6 +163,7 @@ export type Database = {
           is_sample?: boolean
           name: string
           owner_id?: string | null
+          tags?: string[]
           updated_at?: string
         }
         Update: {
@@ -173,6 +175,7 @@ export type Database = {
           is_sample?: boolean
           name?: string
           owner_id?: string | null
+          tags?: string[]
           updated_at?: string
         }
         Relationships: []
@@ -252,6 +255,7 @@ export type Database = {
           owner_id: string | null
           project_id: string | null
           published_at: string | null
+          tags: string[]
           title: string
           updated_at: string
         }
@@ -264,6 +268,7 @@ export type Database = {
           owner_id?: string | null
           project_id?: string | null
           published_at?: string | null
+          tags?: string[]
           title: string
           updated_at?: string
         }
@@ -276,6 +281,7 @@ export type Database = {
           owner_id?: string | null
           project_id?: string | null
           published_at?: string | null
+          tags?: string[]
           title?: string
           updated_at?: string
         }
@@ -301,21 +307,27 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          first_name: string | null
           id: string
+          last_name: string | null
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          first_name?: string | null
           id: string
+          last_name?: string | null
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          first_name?: string | null
           id?: string
+          last_name?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -447,6 +459,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      graph_previews: {
+        Args: {
+          p_graph_ids: string[]
+          p_max_edges?: number
+          p_max_nodes?: number
+        }
+        Returns: {
+          directed: boolean
+          edges: Json
+          graph_id: string
+          nodes: Json
+        }[]
+      }
+      post_fork_counts: {
+        Args: { p_post_ids: string[] }
+        Returns: {
+          fork_count: number
+          post_id: string
+        }[]
+      }
       replace_graph_doc: {
         Args: { p_edges: Json; p_graph_id: string; p_nodes: Json }
         Returns: boolean

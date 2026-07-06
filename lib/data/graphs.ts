@@ -91,6 +91,44 @@ export function toGraphSummary(
 }
 
 /**
+ * Card thumbnails: a bounded, evenly-spread sample of node positions and
+ * edges, keyed by graph id. Sampling happens in the graph_previews SQL
+ * function — a plain embed can only take the FIRST n rows, and nodes insert
+ * in drawing order, so big graphs rendered as one stretched corner of the
+ * canvas instead of their real shape.
+ */
+export type GraphPreview = {
+  directed: boolean;
+  nodes: { id: string; x: number; y: number }[];
+  edges: { source: string; target: string }[];
+};
+
+export async function getGraphPreviews(
+  supabase: Supabase,
+  graphIds: string[],
+): Promise<Record<string, GraphPreview>> {
+  const ids = [...new Set(graphIds)];
+  if (!ids.length) return {};
+
+  // a missing RPC (migration not applied yet) degrades to no thumbnails —
+  // the cards fall back to their placeholder icon instead of a 500
+  const { data, error } = await supabase.rpc("graph_previews", {
+    p_graph_ids: ids,
+  });
+  if (error) return {};
+
+  const previews: Record<string, GraphPreview> = {};
+  for (const row of data ?? []) {
+    previews[row.graph_id] = {
+      directed: row.directed,
+      nodes: row.nodes as GraphPreview["nodes"],
+      edges: row.edges as GraphPreview["edges"],
+    };
+  }
+  return previews;
+}
+
+/**
  * Everything the caller is allowed to see (RLS: own graphs + public ones),
  * split into own and samples for the explorer page. Counts only — cards don't
  * need the node/edge payload.
@@ -154,13 +192,17 @@ export async function getPublicGraphs() {
 export async function getGraph(id: string) {
   const supabase = await createClient();
 
-  const [{ data: userData }, { data: row, error }] = await Promise.all([
+  // fetch the doc concurrently with the row/auth — it only needs the id (a
+  // param). On a not-found / RLS-hidden graph the doc reads come back empty
+  // (RLS covers graph_nodes/edges too) and are simply discarded below.
+  const [{ data: userData }, { data: row, error }, doc] = await Promise.all([
     supabase.auth.getUser(),
     supabase
       .from("graphs")
       .select("*, graph_likes(user_id)")
       .eq("id", id)
       .maybeSingle(),
+    getGraphDoc(supabase, id),
   ]);
   if (error) throw error;
   if (!row) return { user: userData.user, graph: null };
@@ -169,7 +211,6 @@ export async function getGraph(id: string) {
   const { graph_likes, ...graphRow } = row as GraphRow & {
     graph_likes: { user_id: string }[];
   };
-  const doc = await getGraphDoc(supabase, id);
   const graph: Graph = {
     ...graphRow,
     doc,

@@ -12,6 +12,16 @@ const REF_RE =
 /** hard cap on refs fetched per post (two bounded .in() queries) */
 export const MAX_EMBED_REFS = 20;
 
+/**
+ * The first ```python fenced block's code (raw, untrimmed so formatting is
+ * preserved), or null when the post has no python block or it's blank. Shared
+ * by createProjectFromPost and the demo seed so the two never drift.
+ */
+export function firstPythonFence(body: string): string | null {
+  const fence = /```python\s*\n([\s\S]*?)```/i.exec(body);
+  return fence?.[1].trim() ? fence[1] : null;
+}
+
 export function extractEmbedRefs(body: string): {
   graphIds: string[];
   projectIds: string[];

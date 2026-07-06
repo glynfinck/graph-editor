@@ -1,57 +1,35 @@
-"use client";
-
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { FolderCode, Loader2, MoreVertical, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { FolderCode, GitFork } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { GraphThumbnail } from "@/components/graphs/graph-thumbnail";
+import { ProjectCardActions } from "@/components/projects/project-card-actions";
 import {
   Card,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { deleteProject } from "@/lib/actions/projects";
+import type { GraphPreview } from "@/lib/data/graphs";
 import type { Project } from "@/lib/data/projects";
 import { formatRelativeTime } from "@/lib/format";
 
-export function ProjectCard({ project }: { project: Project }) {
-  const router = useRouter();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
-
-  function remove() {
-    startTransition(async () => {
-      const result = await deleteProject(project.id);
-      if (result.ok) {
-        setConfirmOpen(false);
-        toast.success("Project deleted");
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
-
+export function ProjectCard({
+  project,
+  preview,
+  forkedFrom,
+}: {
+  project: Project;
+  /** the active test graph's thumbnail; pass (even null) to render the strip */
+  preview?: GraphPreview | null;
+  /** the source post, when this project was forked from one */
+  forkedFrom?: { id: string; title: string } | null;
+}) {
   return (
     <Card className="group relative gap-3 transition-colors hover:border-ring/40">
       <CardHeader>
+        {preview !== undefined && (
+          <GraphThumbnail preview={preview} className="mb-3 h-24 w-full" />
+        )}
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
             <CardTitle className="flex items-center gap-2 truncate text-base">
@@ -69,52 +47,34 @@ export function ProjectCard({ project }: { project: Project }) {
             </CardDescription>
           </div>
           <div className="relative z-10 -mt-1 -mr-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Project actions"
-                  className="text-muted-foreground"
-                >
-                  <MoreVertical />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  variant="destructive"
-                  onSelect={() => setConfirmOpen(true)}
-                >
-                  <Trash2 /> Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <ProjectCardActions
+              projectId={project.id}
+              projectName={project.name}
+            />
           </div>
         </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          Updated {formatRelativeTime(project.updated_at)}
+        <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+          {project.forked_from_post_id &&
+            (forkedFrom ? (
+              <Link
+                href={`/posts/${forkedFrom.id}`}
+                className="relative z-10 flex min-w-0 items-center gap-1 hover:text-foreground"
+              >
+                <GitFork className="size-3 shrink-0" />
+                <span className="truncate">
+                  Forked from “{forkedFrom.title}”
+                </span>
+              </Link>
+            ) : (
+              <span className="flex items-center gap-1">
+                <GitFork className="size-3" /> Forked
+              </span>
+            ))}
+          <span className="ml-auto shrink-0">
+            Updated {formatRelativeTime(project.updated_at)}
+          </span>
         </div>
       </CardHeader>
-
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete “{project.name}”?</DialogTitle>
-            <DialogDescription>
-              This permanently deletes the project and all of its files.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={remove} disabled={pending}>
-              {pending && <Loader2 className="animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }
