@@ -32,6 +32,21 @@ export async function getOwnProjects() {
   return { user, projects: data ?? [] };
 }
 
+/** The caller's most recently touched projects, bounded for the home page. */
+export async function getRecentProjects(userId: string, limit: number) {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("owner_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  return (data ?? []) as Project[];
+}
+
 /**
  * A project with its files, plus every graph the caller can see (for the
  * test-graph picker). Null project when it doesn't exist or isn't theirs.

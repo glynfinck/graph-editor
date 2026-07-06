@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArrowRight, Compass, LibraryBig } from "lucide-react";
 
 import { GraphCard } from "@/components/graphs/graph-card";
@@ -11,19 +12,107 @@ import {
   ListPageShell,
 } from "@/components/site/list-page";
 import { MarketingHome } from "@/components/site/marketing-home";
+import { CardGridSkeleton } from "@/components/site/skeletons";
 import {
   Card,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getGraphPreviews, getVisibleGraphs } from "@/lib/data/graphs";
-import { getOwnProjects } from "@/lib/data/projects";
+import { getGraphPreviews, getRecentOwnGraphs } from "@/lib/data/graphs";
+import { getRecentProjects } from "@/lib/data/projects";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const RECENT_LIMIT = 6;
+
+function SectionHeading({
+  label,
+  href,
+  linkLabel,
+}: {
+  label: string;
+  href: string;
+  linkLabel: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <h2 className="text-sm font-medium text-muted-foreground">{label}</h2>
+      <Link
+        href={href}
+        className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {linkLabel} <ArrowRight className="inline size-3" />
+      </Link>
+    </div>
+  );
+}
+
+async function RecentProjects({ userId }: { userId: string }) {
+  const supabase = await createClient();
+  const projects = await getRecentProjects(userId, RECENT_LIMIT);
+  const previews = await getGraphPreviews(
+    supabase,
+    projects
+      .map((project) => project.active_graph_id)
+      .filter((id): id is string => !!id),
+  );
+
+  if (projects.length === 0) {
+    return (
+      <EmptyStateCard className="mt-3">
+        No projects yet — create one to edit code and graphs side by side.
+      </EmptyStateCard>
+    );
+  }
+  return (
+    <CardGrid className="mt-3">
+      {projects.map((project) => (
+        <ProjectCard
+          key={project.id}
+          project={project}
+          preview={
+            project.active_graph_id
+              ? (previews[project.active_graph_id] ?? null)
+              : null
+          }
+        />
+      ))}
+    </CardGrid>
+  );
+}
+
+async function RecentGraphs({ userId }: { userId: string }) {
+  const supabase = await createClient();
+  const graphs = await getRecentOwnGraphs(userId, RECENT_LIMIT);
+  if (graphs.length === 0) return null;
+  const previews = await getGraphPreviews(
+    supabase,
+    graphs.map((graph) => graph.id),
+  );
+
+  return (
+    <section className="mt-8">
+      <SectionHeading
+        label="Your graphs"
+        href="/library?tab=graphs"
+        linkLabel="All graphs"
+      />
+      <CardGrid className="mt-3">
+        {graphs.map((graph) => (
+          <GraphCard
+            key={graph.id}
+            graph={graph}
+            canDelete
+            signedIn
+            preview={previews[graph.id] ?? null}
+          />
+        ))}
+      </CardGrid>
+    </section>
+  );
+}
 
 export default async function Home() {
   const supabase = await createClient();
@@ -32,20 +121,6 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   if (!user) return <MarketingHome />;
-
-  const [{ projects }, { mine }] = await Promise.all([
-    getOwnProjects(),
-    getVisibleGraphs(),
-  ]);
-
-  const recentProjects = projects.slice(0, RECENT_LIMIT);
-  const recentGraphs = mine.slice(0, RECENT_LIMIT);
-  const previews = await getGraphPreviews(supabase, [
-    ...recentGraphs.map((graph) => graph.id),
-    ...recentProjects
-      .map((project) => project.active_graph_id)
-      .filter((id): id is string => !!id),
-  ]);
 
   return (
     <ListPageShell>
@@ -56,64 +131,33 @@ export default async function Home() {
       />
 
       <section className="mt-8">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">
-            Recent projects
-          </h2>
-          <Link
-            href="/library?tab=projects"
-            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            All projects <ArrowRight className="inline size-3" />
-          </Link>
-        </div>
-        {recentProjects.length === 0 ? (
-          <EmptyStateCard className="mt-3">
-            No projects yet — create one to edit code and graphs side by side.
-          </EmptyStateCard>
-        ) : (
-          <CardGrid className="mt-3">
-            {recentProjects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                preview={
-                  project.active_graph_id
-                    ? (previews[project.active_graph_id] ?? null)
-                    : null
-                }
-              />
-            ))}
-          </CardGrid>
-        )}
+        <SectionHeading
+          label="Recent projects"
+          href="/library?tab=projects"
+          linkLabel="All projects"
+        />
+        <Suspense
+          fallback={
+            <div className="mt-3">
+              <CardGridSkeleton count={3} />
+            </div>
+          }
+        >
+          <RecentProjects userId={user.id} />
+        </Suspense>
       </section>
 
-      {recentGraphs.length > 0 && (
-        <section className="mt-8">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Your graphs
-            </h2>
-            <Link
-              href="/library?tab=graphs"
-              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              All graphs <ArrowRight className="inline size-3" />
-            </Link>
-          </div>
-          <CardGrid className="mt-3">
-            {recentGraphs.map((graph) => (
-              <GraphCard
-                key={graph.id}
-                graph={graph}
-                canDelete
-                signedIn
-                preview={previews[graph.id] ?? null}
-              />
-            ))}
-          </CardGrid>
-        </section>
-      )}
+      <Suspense
+        fallback={
+          <section className="mt-8">
+            <div className="mt-3">
+              <CardGridSkeleton count={3} />
+            </div>
+          </section>
+        }
+      >
+        <RecentGraphs userId={user.id} />
+      </Suspense>
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2">
         <Link href="/library" className="group">

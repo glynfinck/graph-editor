@@ -46,34 +46,6 @@ export function toPost(row: PostJoinRow, userId: string | null = null): Post {
 }
 
 /**
- * Everything the feed needs in one query — RLS returns published posts plus
- * the caller's own drafts, split and ordered here.
- */
-export async function getPostsIndex() {
-  const supabase = await createClient();
-
-  const [{ data: userData }, { data, error }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from("posts").select(POST_SELECT),
-  ]);
-  if (error) throw error;
-
-  const user = userData.user;
-  const posts = ((data as PostJoinRow[] | null) ?? []).map((row) =>
-    toPost(row, user?.id ?? null),
-  );
-  return {
-    user,
-    published: posts
-      .filter((post) => post.is_published)
-      .sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? "")),
-    drafts: posts
-      .filter((post) => !post.is_published)
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
-  };
-}
-
-/**
  * Load the graphs/projects a post body links to, so qualifying links render
  * as cards. RLS silently drops what the reader can't see — those stay links.
  */

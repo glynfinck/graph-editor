@@ -64,6 +64,13 @@ export type Database = {
             foreignKeyName: "graph_edges_graph_id_fkey"
             columns: ["graph_id"]
             isOneToOne: false
+            referencedRelation: "graph_summaries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "graph_edges_graph_id_fkey"
+            columns: ["graph_id"]
+            isOneToOne: false
             referencedRelation: "graphs"
             referencedColumns: ["id"]
           },
@@ -104,6 +111,13 @@ export type Database = {
             foreignKeyName: "graph_likes_graph_id_fkey"
             columns: ["graph_id"]
             isOneToOne: false
+            referencedRelation: "graph_summaries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "graph_likes_graph_id_fkey"
+            columns: ["graph_id"]
+            isOneToOne: false
             referencedRelation: "graphs"
             referencedColumns: ["id"]
           },
@@ -132,6 +146,13 @@ export type Database = {
           y?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "graph_nodes_graph_id_fkey"
+            columns: ["graph_id"]
+            isOneToOne: false
+            referencedRelation: "graph_summaries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "graph_nodes_graph_id_fkey"
             columns: ["graph_id"]
@@ -207,6 +228,13 @@ export type Database = {
             foreignKeyName: "post_comments_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: false
+            referencedRelation: "post_summaries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
@@ -236,6 +264,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "post_summaries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "post_likes_post_id_fkey"
             columns: ["post_id"]
@@ -391,6 +426,13 @@ export type Database = {
             foreignKeyName: "project_graphs_graph_id_fkey"
             columns: ["graph_id"]
             isOneToOne: false
+            referencedRelation: "graph_summaries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_graphs_graph_id_fkey"
+            columns: ["graph_id"]
+            isOneToOne: false
             referencedRelation: "graphs"
             referencedColumns: ["id"]
           },
@@ -442,7 +484,21 @@ export type Database = {
             foreignKeyName: "projects_active_graph_id_fkey"
             columns: ["active_graph_id"]
             isOneToOne: false
+            referencedRelation: "graph_summaries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_active_graph_id_fkey"
+            columns: ["active_graph_id"]
+            isOneToOne: false
             referencedRelation: "graphs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_forked_from_post_id_fkey"
+            columns: ["forked_from_post_id"]
+            isOneToOne: false
+            referencedRelation: "post_summaries"
             referencedColumns: ["id"]
           },
           {
@@ -456,9 +512,169 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      graph_summaries: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          directed: boolean | null
+          edge_count: number | null
+          id: string | null
+          is_public: boolean | null
+          is_sample: boolean | null
+          like_count: number | null
+          name: string | null
+          node_count: number | null
+          owner_id: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          directed?: boolean | null
+          edge_count?: never
+          id?: string | null
+          is_public?: boolean | null
+          is_sample?: boolean | null
+          like_count?: never
+          name?: string | null
+          node_count?: never
+          owner_id?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          directed?: boolean | null
+          edge_count?: never
+          id?: string | null
+          is_public?: boolean | null
+          is_sample?: boolean | null
+          like_count?: never
+          name?: string | null
+          node_count?: never
+          owner_id?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      post_summaries: {
+        Row: {
+          body: string | null
+          comment_count: number | null
+          created_at: string | null
+          id: string | null
+          is_official: boolean | null
+          is_published: boolean | null
+          like_count: number | null
+          owner_id: string | null
+          project_id: string | null
+          published_at: string | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          body?: string | null
+          comment_count?: never
+          created_at?: string | null
+          id?: string | null
+          is_official?: boolean | null
+          is_published?: boolean | null
+          like_count?: never
+          owner_id?: string | null
+          project_id?: string | null
+          published_at?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          body?: string | null
+          comment_count?: never
+          created_at?: string | null
+          id?: string | null
+          is_official?: boolean | null
+          is_published?: boolean | null
+          like_count?: never
+          owner_id?: string | null
+          project_id?: string | null
+          published_at?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posts_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      explore_graphs: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_q?: string
+          p_sort?: string
+          p_tag?: string
+        }
+        Returns: {
+          created_at: string
+          description: string
+          directed: boolean
+          edge_count: number
+          id: string
+          is_public: boolean
+          is_sample: boolean
+          like_count: number
+          name: string
+          node_count: number
+          owner_id: string
+          tags: string[]
+          total_count: number
+          updated_at: string
+        }[]
+      }
+      explore_posts: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_q?: string
+          p_sort?: string
+          p_tag?: string
+        }
+        Returns: {
+          body: string
+          comment_count: number
+          created_at: string
+          id: string
+          is_official: boolean
+          is_published: boolean
+          like_count: number
+          owner_id: string
+          project_id: string
+          published_at: string
+          tags: string[]
+          title: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
       graph_previews: {
         Args: {
           p_graph_ids: string[]

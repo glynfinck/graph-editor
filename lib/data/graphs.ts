@@ -128,64 +128,21 @@ export async function getGraphPreviews(
   return previews;
 }
 
-/**
- * Everything the caller is allowed to see (RLS: own graphs + public ones),
- * split into own and samples for the explorer page. Counts only — cards don't
- * need the node/edge payload.
- */
-export async function getVisibleGraphs() {
+/** The caller's most recently touched graphs, bounded for the home page. */
+export async function getRecentOwnGraphs(userId: string, limit: number) {
   const supabase = await createClient();
 
-  const [{ data: userData }, { data, error }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase
-      .from("graphs")
-      .select(SUMMARY_SELECT)
-      .order("is_sample", { ascending: true })
-      .order("updated_at", { ascending: false }),
-  ]);
+  const { data, error } = await supabase
+    .from("graphs")
+    .select(SUMMARY_SELECT)
+    .eq("owner_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
 
-  const user = userData.user;
-  const graphs = ((data as SummaryRow[] | null) ?? []).map((row) =>
-    toGraphSummary(row, user?.id ?? null),
+  return ((data as SummaryRow[] | null) ?? []).map((row) =>
+    toGraphSummary(row, userId),
   );
-  return {
-    user,
-    mine: graphs.filter((g) => user && g.owner_id === user.id),
-    samples: graphs.filter((g) => g.is_sample),
-  };
-}
-
-/**
- * Public graphs for the explore gallery: the seeded samples plus anything
- * the community has published. Anonymous-safe — RLS allows public reads.
- */
-export async function getPublicGraphs() {
-  const supabase = await createClient();
-
-  const [{ data: userData }, { data, error }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase
-      .from("graphs")
-      .select(SUMMARY_SELECT)
-      .eq("is_public", true)
-      .order("updated_at", { ascending: false }),
-  ]);
-  if (error) throw error;
-
-  const user = userData.user;
-  const graphs = ((data as SummaryRow[] | null) ?? []).map((row) =>
-    toGraphSummary(row, user?.id ?? null),
-  );
-  return {
-    user,
-    samples: graphs.filter((g) => g.is_sample),
-    // highest rated first; the query already breaks ties by recency
-    community: graphs
-      .filter((g) => !g.is_sample)
-      .sort((a, b) => b.likeCount - a.likeCount),
-  };
 }
 
 /** Single graph by id — null when it doesn't exist or isn't visible (RLS). */

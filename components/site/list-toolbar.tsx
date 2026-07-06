@@ -1,10 +1,12 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { LayoutGrid, Loader2, Rows3, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { LayoutGrid, Rows3, Search } from "lucide-react";
 
+import { useListNav } from "@/components/site/list-transition";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Select,
   SelectContent,
@@ -79,7 +81,8 @@ export function ListToolbar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const nav = useListNav();
+  const pending = nav?.pending ?? false;
   const [query, setQuery] = useState(initialQuery);
   const skipFirstDebounce = useRef(true);
 
@@ -94,9 +97,9 @@ export function ListToolbar({
       else params.set(key, value);
     }
     const qs = params.toString();
-    startTransition(() => {
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    });
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    if (nav) nav.navigate(href, { replace: true, scroll: false });
+    else router.replace(href, { scroll: false });
   }
 
   useEffect(() => {
@@ -142,7 +145,7 @@ export function ListToolbar({
               className="h-8 w-44 pl-8 text-sm sm:w-56"
             />
             {pending && (
-              <Loader2 className="absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+              <Spinner className="absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2" />
             )}
           </div>
 
