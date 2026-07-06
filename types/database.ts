@@ -36,6 +36,7 @@ export type Database = {
     Tables: {
       graph_edges: {
         Row: {
+          attributes: Json
           graph_id: string
           id: string
           name: string | null
@@ -44,6 +45,7 @@ export type Database = {
           weight: number | null
         }
         Insert: {
+          attributes?: Json
           graph_id: string
           id?: string
           name?: string | null
@@ -52,6 +54,7 @@ export type Database = {
           weight?: number | null
         }
         Update: {
+          attributes?: Json
           graph_id?: string
           id?: string
           name?: string | null
@@ -125,6 +128,7 @@ export type Database = {
       }
       graph_nodes: {
         Row: {
+          attributes: Json
           graph_id: string
           id: string
           name: string
@@ -132,6 +136,7 @@ export type Database = {
           y: number
         }
         Insert: {
+          attributes?: Json
           graph_id: string
           id?: string
           name: string
@@ -139,6 +144,7 @@ export type Database = {
           y: number
         }
         Update: {
+          attributes?: Json
           graph_id?: string
           id?: string
           name?: string

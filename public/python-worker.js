@@ -13,8 +13,12 @@
 //
 // (main -> worker):
 //   { runId, prelude, code,
-//     graph: { directed, nodes: [{id,name}], edges: [{source,target,weight}] },
+//     graph: { directed,
+//              nodes: [{id,name,x,y,attributes}],
+//              edges: [{source,target,weight,attributes}] },
 //     files?: [{ path, content }], entryPath? }
+//   `attributes` is a { key: string|number|boolean } bag set in the editor;
+//   Python reads it via graph.getAttr / getEdgeAttr / getNodes(data=True).
 //
 // `entryPath` (project mode) is the project-relative path `code` came from;
 // the code is then compiled as /project/<entryPath> so the prelude's tracer

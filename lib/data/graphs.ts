@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { GraphDoc } from "@/lib/graph/types";
+import type { Attributes, GraphDoc } from "@/lib/graph/types";
 import type { Tables } from "@/types/helpers";
 
 export type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -47,25 +47,44 @@ export async function getGraphDoc(
   supabase: Supabase,
   graphId: string,
 ): Promise<GraphDoc> {
-  const [nodes, edges] = await Promise.all([
-    fetchAllRows<GraphDoc["nodes"][number]>((from, to) =>
+  // `attributes` comes back as Json; cast it to the doc's Attributes at this
+  // boundary (writes constrain it via graphDocSchema, so the DB is trusted on
+  // read — same as the other columns).
+  const [nodeRows, edgeRows] = await Promise.all([
+    fetchAllRows((from, to) =>
       supabase
         .from("graph_nodes")
-        .select("id, name, x, y")
+        .select("id, name, x, y, attributes")
         .eq("graph_id", graphId)
         .order("id")
         .range(from, to),
     ),
-    fetchAllRows<GraphDoc["edges"][number]>((from, to) =>
+    fetchAllRows((from, to) =>
       supabase
         .from("graph_edges")
-        .select("id, source, target, weight, name")
+        .select("id, source, target, weight, name, attributes")
         .eq("graph_id", graphId)
         .order("id")
         .range(from, to),
     ),
   ]);
-  return { nodes, edges };
+  return {
+    nodes: nodeRows.map((n) => ({
+      id: n.id,
+      name: n.name,
+      x: n.x,
+      y: n.y,
+      attributes: (n.attributes ?? {}) as Attributes,
+    })),
+    edges: edgeRows.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      weight: e.weight,
+      name: e.name,
+      attributes: (e.attributes ?? {}) as Attributes,
+    })),
+  };
 }
 
 export const SUMMARY_SELECT =
