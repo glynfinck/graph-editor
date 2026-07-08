@@ -20,14 +20,91 @@ import { fitBounds, type Pt } from "@/lib/editor/pixi/geometry";
 export function useThemeVersion(): number {
   const [version, setVersion] = useState(0);
   useEffect(() => {
-    const obs = new MutationObserver(() => setVersion((v) => v + 1));
-    obs.observe(document.documentElement, {
+    const root = document.documentElement;
+    // The only inputs that change the rendered palette: light/dark and which
+    // palette is active. Dedupe on that signature so incidental class churn —
+    // next-themes rewriting the class on hydration, toasts/scroll-locks adding
+    // transient classes — doesn't needlessly tear down and rebuild the whole
+    // WebGL scene (a visible flash on the graph canvas).
+    const signature = () =>
+      `${root.classList.contains("dark")}|${root.dataset.palette ?? ""}`;
+    let last = signature();
+    const obs = new MutationObserver(() => {
+      const next = signature();
+      if (next === last) return;
+      last = next;
+      setVersion((v) => v + 1);
+    });
+    obs.observe(root, {
       attributes: true,
       attributeFilter: ["class", "data-palette"],
     });
     return () => obs.disconnect();
   }, []);
   return version;
+}
+
+/**
+ * Append a freshly-built Pixi canvas without the one-frame white flash Chrome
+ * on macOS shows when a WebGL canvas's compositor layer first attaches (real
+ * GPU only — the blank plate is drawn by the OS compositor IN FRONT of the
+ * page, so no themed backdrop or pre-render can cover it, and screenshot/CDP
+ * readback never sees it). The canvas enters the DOM at 1% opacity — invisible
+ * to the eye, but high enough that Blink still paints and composites it (a true
+ * opacity:0 subtree can be culled, which would just move the layer-attach — and
+ * the flash — to reveal time). Two animation frames later the layer holds real
+ * presented content, so its first *visible* composite is the scene. Returns a
+ * cancel function for teardown.
+ */
+export function appendCanvasWithoutFlash(
+  el: HTMLElement,
+  canvas: HTMLCanvasElement,
+): () => void {
+  // if the compositor ever shows the layer with no content anyway, fall back
+  // to the pane color rather than white
+  canvas.style.backgroundColor = getComputedStyle(el).backgroundColor;
+  canvas.style.opacity = "0.01";
+  el.appendChild(canvas);
+  let raf = requestAnimationFrame(() => {
+    raf = requestAnimationFrame(() => {
+      canvas.style.opacity = "";
+    });
+  });
+
+  // The other half of the flash lives at document TEARDOWN: on a macOS Chrome
+  // cross-document navigation (hard refresh included), the dying page's WebGL
+  // layer drops its content one frame before the next document's first paint,
+  // and the compositor draws the pane as a white plate for that frame — in
+  // front of all page content, so no backdrop can cover it. Measured with an
+  // OS-level 120fps ScreenCaptureKit capture: exactly one 120Hz frame (~8ms),
+  // ~7 of 8 reloads; invisible to CDP/screenshot readback, which is why no
+  // in-browser diagnostic ever saw it. Hiding the canvas when navigation
+  // starts (below) gives the swap a canvas-free pane to happen over. NOTE:
+  // this reduced but did NOT fully eliminate the artifact on a heavy real
+  // profile — it appears to be a Chrome/macOS compositor bug outside the
+  // page's control; a clean profile does not reproduce it at all.
+  let restoreTimer = 0;
+  const hideForUnload = () => {
+    canvas.style.visibility = "hidden";
+    window.clearTimeout(restoreTimer);
+    restoreTimer = window.setTimeout(() => {
+      canvas.style.visibility = "";
+    }, 5000);
+  };
+  const restore = () => {
+    window.clearTimeout(restoreTimer);
+    canvas.style.visibility = "";
+  };
+  window.addEventListener("beforeunload", hideForUnload);
+  window.addEventListener("pagehide", hideForUnload);
+  window.addEventListener("pageshow", restore);
+  return () => {
+    cancelAnimationFrame(raf);
+    window.clearTimeout(restoreTimer);
+    window.removeEventListener("beforeunload", hideForUnload);
+    window.removeEventListener("pagehide", hideForUnload);
+    window.removeEventListener("pageshow", restore);
+  };
 }
 
 // zoom feel — shared so both canvases scroll identically

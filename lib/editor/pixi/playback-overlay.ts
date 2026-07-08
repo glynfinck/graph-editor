@@ -32,6 +32,8 @@ export type PlaybackOverlay = {
    * drag or structural edit moves/removes a decorated element, since the
    * append-only painters bake absolute coordinates at promotion time */
   refresh: () => void;
+  /** flip directedness in place — re-fold decorations with the new edge keys */
+  setDirected: (directed: boolean) => void;
   destroy: () => void;
 };
 
@@ -73,7 +75,9 @@ export function createPlaybackOverlay(opts: {
   /** resolve a frame edge key to its endpoint positions (live) */
   edgeRec: (key: string) => { s: Pt; t: Pt } | undefined;
 }): PlaybackOverlay {
-  const { world, ticker, palette: c, directed, nodePos, edgeRec } = opts;
+  const { world, ticker, palette: c, nodePos, edgeRec } = opts;
+  // mutable so a direction toggle re-folds decorations without a scene rebuild
+  let directed = opts.directed;
 
   // Fixed sub-layers keep the z-order stable (edges under nodes, cursor on top)
   // regardless of promotion order during a run.
@@ -261,6 +265,14 @@ export function createPlaybackOverlay(opts: {
     // (drawNode/drawEdge read nodePos/edgeRec fresh, and a removed element's
     // lookup returns undefined so its ghost drops out)
     refresh: () => repaintAll(vs),
+    setDirected: (next: boolean) => {
+      if (next === directed) return;
+      directed = next;
+      // edgeKey canonicalizes undirected edges, so decoration keys change with
+      // directedness — re-fold the current playhead from scratch and repaint.
+      if (foldedFrames) vs = computeVisualState(foldedFrames, foldedCount, directed);
+      repaintAll(vs);
+    },
     destroy: () => {
       ticker.remove(animateDashes);
       overlay.destroy({ children: true });

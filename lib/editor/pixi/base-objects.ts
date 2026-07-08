@@ -48,6 +48,8 @@ export type ObjectScene = {
   edgeRec: (key: string) => { s: Pt; t: Pt } | undefined;
   /** re-sync the scene to a store snapshot (structural edits) */
   reconcile: (nodes: GraphFlowNode[], edges: GraphFlowEdge[]) => void;
+  /** flip directedness in place — redraw edges + arrowheads, no rebuild */
+  setDirected: (directed: boolean) => void;
   /** imperative move during a drag: object + incident edges, no reconcile */
   moveNode: (id: string, x: number, y: number) => void;
   setNodeLabel: (id: string, name: string) => void;
@@ -71,7 +73,9 @@ export function createObjectScene(opts: {
   palette: GraphPalette;
   directed: boolean;
 }): ObjectScene {
-  const { palette: c, directed } = opts;
+  const { palette: c } = opts;
+  // mutable so a direction toggle can redraw edges in place (no scene rebuild)
+  let directed = opts.directed;
   const edgesLayer = new Container();
   const edgeLabelsLayer = new Container();
   const nodesLayer = new Container();
@@ -217,6 +221,21 @@ export function createObjectScene(opts: {
     }
   };
 
+  const setDirected = (next: boolean) => {
+    if (next === directed) return;
+    directed = next;
+    // redraw every edge (arrowhead on/off + endpoint trim) and rebuild the
+    // frame-key index — edgeKey canonicalizes undirected edges, so the keys
+    // change with directedness. No teardown: the WebGL canvas stays put.
+    recByKey.clear();
+    for (const [, o] of edgesById) {
+      const s = center(o.source);
+      const t = center(o.target);
+      if (s && t) recByKey.set(edgeKey(o.source, o.target, directed), { s, t });
+      drawEdge(o);
+    }
+  };
+
   const moveNode = (id: string, x: number, y: number) => {
     const o = nodesById.get(id);
     if (!o) return;
@@ -267,6 +286,7 @@ export function createObjectScene(opts: {
     nodePos: (id) => center(id),
     edgeRec: (key) => recByKey.get(key),
     reconcile,
+    setDirected,
     moveNode,
     setNodeLabel,
     setEdgeLabel,

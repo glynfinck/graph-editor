@@ -34,7 +34,12 @@ import { DirectedToggle } from "@/components/editor/directed-toggle";
 // pixi.js is code-split out of the initial bundle.
 const PixiGraphCanvas = dynamic(
   () => import("@/components/editor/pixi-graph-canvas"),
-  { ssr: false },
+  {
+    ssr: false,
+    // next/dynamic renders this for at least one frame before the chunk mounts
+    // (even when cached) — without it that frame is blank white. Themed fill.
+    loading: () => <div className="h-full w-full bg-background" />,
+  },
 );
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,6 +72,7 @@ import { saveProject } from "@/lib/actions/projects";
 import type { GraphSummary } from "@/lib/data/graphs";
 import { EMPTY_GRAPH_DOC, type GraphDoc } from "@/lib/graph/types";
 import {
+  APP_MONACO_THEME,
   applyMonacoAppTheme,
   useMonacoAppTheme,
 } from "@/lib/editor/monaco-theme";
@@ -671,6 +677,12 @@ export function ProjectWorkspace({
                   path={`${project.id}/${openPath}`}
                   language={languageOf(openPath)}
                   value={files[openPath] ?? ""}
+                  theme={APP_MONACO_THEME}
+                  // Register the palette theme before the editor is created so
+                  // it paints with the right background on the first frame —
+                  // otherwise Monaco mounts with its default light "vs" theme
+                  // and flashes white (in dark mode too).
+                  beforeMount={(monaco) => applyMonacoAppTheme(monaco)}
                   onChange={(value) => {
                     setContent(openPath, value ?? "");
                     setEditedSinceRun(true);
@@ -737,6 +749,10 @@ export function ProjectWorkspace({
         >
           <ResizablePanelGroup orientation="vertical">
             <ResizablePanel defaultSize="62%" minSize="20%">
+              {/* Solid themed backdrop behind every graph state (skeleton /
+               * dynamic-loading / canvas), so no transition gap ever falls
+               * through to a bare white panel — the graph-pane flash on load. */}
+              <div data-testid="graph-pane" className="h-full w-full bg-background">
               {activeGraphId && graphLoadError === activeGraphId ? (
                 <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                   <span>Couldn’t load this graph’s document.</span>
@@ -764,6 +780,7 @@ export function ProjectWorkspace({
                   Pick a test graph from the selector above
                 </div>
               )}
+              </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel
