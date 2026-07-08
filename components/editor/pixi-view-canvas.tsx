@@ -18,6 +18,7 @@ import {
   type PlaybackOverlay,
 } from "@/lib/editor/pixi/playback-overlay";
 import {
+  appendCanvasWithoutFlash,
   attachPanZoom,
   fitView,
   useThemeVersion,
@@ -82,13 +83,23 @@ export default function PixiViewCanvas({
         autoDensity: true,
         resolution: window.devicePixelRatio || 1,
         background: pal.bg,
+        // 0.999, NOT 1: with a fully opaque background Pixi requests the GL
+        // context with alpha:false, and macOS Chrome gives an opaque WebGL
+        // canvas its own opaque compositor plate — which flashes white for one
+        // frame when the plate first attaches (before its content does). With
+        // an alpha channel the not-yet-attached state composites as
+        // transparent, so the themed pane shows through instead of white.
+        // Visually identical: the same color at 99.9% over the same backdrop.
+        backgroundAlpha: 0.999,
       });
       if (destroyed) {
         application.destroy(true);
         return;
       }
       app = application;
-      el.appendChild(app.canvas);
+      // the canvas is appended below, only after app.render() paints the first
+      // frame — appending a blank WebGL canvas lets the compositor flash its
+      // empty (white) layer for a frame before any content shows
       // all input is DOM-driven; disable Pixi's event system so it doesn't
       // reset the canvas cursor on every move
       app.stage.eventMode = "none";
@@ -235,7 +246,17 @@ export default function PixiViewCanvas({
       const s0 = useEditorStore.getState();
       overlay.decorate(s0.frames, s0.playhead);
 
+      // Paint one frame synchronously so the freshly-appended canvas presents
+      // the themed scene on its first composite. Without this the WebGL backing
+      // store shows a blank (white) frame until the ticker's first tick — a
+      // theme-independent flash on every rebuild (direction toggle, theme swap).
+      app.render();
+      // append invisible, reveal two frames later — see the helper for why the
+      // pre-render alone can't stop the compositor-layer-attach flash
+      const cancelReveal = appendCanvasWithoutFlash(el, app.canvas);
+
       teardown = () => {
+        cancelReveal();
         window.clearTimeout(settle);
         resizeObs.disconnect();
         sceneRef.current = null;
@@ -264,7 +285,10 @@ export default function PixiViewCanvas({
   }, [frames, playhead]);
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
+    <div
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden bg-background"
+    >
       {showPlayback && (
         <div className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2">
           <div className="pointer-events-auto">

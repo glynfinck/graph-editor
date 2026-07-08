@@ -1,18 +1,12 @@
-"use client";
+import Link from "next/link";
 
-import Link, { useLinkStatus } from "next/link";
-
-import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
-function PendingDot() {
-  const { pending } = useLinkStatus();
-  return pending ? <Spinner className="size-3" /> : null;
-}
-
 /**
- * A nav link that shows a small spinner while its navigation is pending —
- * immediate feedback when the destination's server render is slow.
+ * A styled nav link. Loading feedback for a slow destination is handled by
+ * that route's `loading.tsx` skeleton (e.g. app/library/loading.tsx,
+ * app/explore/loading.tsx) — no inline spinner here, so a pending navigation
+ * never widens the link or shoves sibling nav items sideways.
  */
 export function NavLink({
   href,
@@ -24,12 +18,8 @@ export function NavLink({
   children: React.ReactNode;
 }) {
   return (
-    <Link
-      href={href}
-      className={cn("inline-flex items-center gap-1.5", className)}
-    >
+    <Link href={href} className={cn("inline-flex items-center", className)}>
       {children}
-      <PendingDot />
     </Link>
   );
 }
